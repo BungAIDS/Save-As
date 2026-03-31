@@ -95,27 +95,9 @@ Sub main()
     Dim revLetter As String
     revLetter = ""
 
-    '--- DEBUG: show parsed values so we can verify path detection ---
-    MsgBox "DEBUG – Parsed values:" & vbCrLf & vbCrLf & _
-           "drawingPath:    " & drawingPath & vbCrLf & _
-           "drawingFolder:  " & drawingFolder & vbCrLf & _
-           "drawingBaseName:" & drawingBaseName & vbCrLf & _
-           "jobNumber:      " & jobNumber, _
-           vbInformation, "Save-As Export – DEBUG"
-
     '--- Detect SW job type from path ---
     Dim swJobType As String
     swJobType = DetectJobType(drawingFolder)
-
-    '--- DEBUG: show job type detection and AutoCAD folder result ---
-    Dim acDebug As String
-    acDebug = BuildAutoCADJobFolder(jobNumber, swJobType)
-    MsgBox "DEBUG – Path detection:" & vbCrLf & vbCrLf & _
-           "SW_ROOT:        " & SW_ROOT & vbCrLf & _
-           "PathStartsWith: " & PathStartsWith(drawingFolder, SW_ROOT) & vbCrLf & _
-           "swJobType:      " & IIf(swJobType <> "", swJobType, "(empty)") & vbCrLf & _
-           "acJobFolder:    " & IIf(acDebug <> "", acDebug, "(empty – will fail)"), _
-           vbInformation, "Save-As Export – DEBUG"
 
     If Not PathStartsWith(drawingFolder, SW_ROOT) Then
         Dim resp As Integer
