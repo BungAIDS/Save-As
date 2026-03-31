@@ -1,18 +1,18 @@
-VERSION 5.00
-Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} ExportDialog
-   Caption         =   "Save-As Export"
-   ClientHeight    =   4440
-   ClientLeft      =   120
-   ClientTop       =   465
-   ClientWidth     =   5400
-   OleObjectBlob   =   "ExportDialog.frx":0000
-   StartUpPosition =   1  'CenterOwner
-End
-Attribute VB_Name = "Export_Dialog"
-Attribute VB_GlobalNameSpace = False
-Attribute VB_Creatable = False
-Attribute VB_PredeclaredId = True
-Attribute VB_Exposed = False
+'VERSION 5.00
+'Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} ExportDialog
+'   Caption         =   "Save-As Export"
+'   ClientHeight    =   4440
+'   ClientLeft      =   120
+'   ClientTop       =   465
+'   ClientWidth     =   5400
+'   OleObjectBlob   =   "ExportDialog.frx":0000
+'   StartUpPosition =   1  'CenterOwner
+'End
+'Attribute VB_Name = "Export_Dialog"
+'Attribute VB_GlobalNameSpace = False
+'Attribute VB_Creatable = False
+'Attribute VB_PredeclaredId = True
+'Attribute VB_Exposed = False
 '==============================================================================
 ' ExportDialog.frm
 ' UserForm for the SaveAs_Export macro.
