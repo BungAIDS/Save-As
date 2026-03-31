@@ -26,21 +26,25 @@
 ### 4 – Build the UserForm controls (if importing from source)
 Open `ExportDialog` in the designer and add the following controls with the exact `(Name)` values shown:
 
-| Control type | (Name)        | Caption / Text                  | Notes                          |
-|--------------|---------------|---------------------------------|--------------------------------|
-| Label        | `lblTitle`    | Save-As Export Utility          | Bold, size 12                  |
-| Label        | `lblDrawing`  | Drawing:                        |                                |
-| Label        | `lblDrawingName` | *(blank)*                    | Filled at runtime              |
-| Label        | `lblRevision` | Revision Letter:                |                                |
-| TextBox      | `txtRevision` | *(blank)*                       | MaxLength = 2                  |
-| Frame        | `fraFormats`  | Export Formats                  |                                |
-| CheckBox     | `chkPDF`      | PDF (.pdf)                      | Inside `fraFormats`            |
-| CheckBox     | `chkDWG`      | AutoCAD DWG (.dwg)              | Inside `fraFormats`            |
-| CheckBox     | `chkDXF`      | DXF (.dxf)                      | Inside `fraFormats`            |
-| Label        | `lblPreview`  | Output file name preview:       |                                |
-| Label        | `lblPreviewVal` | *(blank)*                     | Filled at runtime; WordWrap=True |
-| CommandButton | `btnOK`      | Export                          | Default = True                 |
-| CommandButton | `btnCancel`  | Cancel                          | Cancel = True                  |
+| Control type  | (Name)           | Caption / Text                        | Notes                          |
+|---------------|------------------|---------------------------------------|--------------------------------|
+| Label         | `lblTitle`       | Save-As Export Utility                | Bold, size 12                  |
+| Label         | `lblJobType`     | Job Type:                             |                                |
+| Label         | `lblJobTypeVal`  | *(blank)*                             | Filled at runtime              |
+| Label         | `lblFolder`      | Save folder:                          |                                |
+| Label         | `lblFolderVal`   | *(blank)*                             | Filled at runtime; WordWrap=True |
+| Label         | `lblDrawing`     | Drawing / Job #:                      |                                |
+| Label         | `lblDrawingName` | *(blank)*                             | Filled at runtime              |
+| Label         | `lblRevision`    | Revision Letter:                      |                                |
+| TextBox       | `txtRevision`    | *(blank)*                             | MaxLength = 2                  |
+| Frame         | `fraFormats`     | Export Formats                        |                                |
+| CheckBox      | `chkPDF`         | PDF (.pdf)                            | Inside `fraFormats`            |
+| CheckBox      | `chkDWG`         | AutoCAD DWG (.dwg)                    | Inside `fraFormats`            |
+| CheckBox      | `chkDXF`         | DXF (.dxf) → saved in DXF\ sub-folder | Inside `fraFormats`           |
+| Label         | `lblPreview`     | Output file name preview:             |                                |
+| Label         | `lblPreviewVal`  | *(blank)*                             | Filled at runtime; WordWrap=True |
+| CommandButton | `btnOK`          | Export                                | Default = True                 |
+| CommandButton | `btnCancel`      | Cancel                                | Cancel = True                  |
 
 ### 5 – Run the macro
 1. Open (or activate) a SolidWorks drawing (`.SLDDRW`).
@@ -49,27 +53,40 @@ Open `ExportDialog` in the designer and add the following controls with the exac
 
 ---
 
-## How It Works
+## Folder Architecture
 
 ```
-Drawing folder\
-├── 12345.SLDDRW              ← your drawing
-├── 12345-RevA.pdf            ← PDF export (same folder)
-├── 12345-RevA.dwg            ← DWG export (same folder)
-├── DXF\
-│   └── 12345-RevA.dxf        ← DXF export (dedicated sub-folder)
-└── History\
-    ├── 12345-RevA.pdf        ← archived when Rev B is exported
-    └── 12345-RevA.dwg
+Z:\Solidworks\Current\JOBS\
+├── GENERAL LINE\
+│   └── 121-125\           ← range folder (first 3 digits of job#, groups of 5)
+│       └── 12345\
+│           ├── 12345.SLDDRW
+│           ├── 12345-RevA.pdf
+│           ├── 12345-RevA.dwg
+│           ├── DXF\
+│           │   └── 12345-RevA.dxf
+│           └── History\
+│               └── (archived old revisions)
+├── HD-PFD\
+│   └── 40XXXX\            ← first 2 digits + XXXX  (e.g. 401234 → 40XXXX)
+│       └── 401234\
+│           └── ...
+└── HDX\
+    └── 121-125\           ← same range formula as GENERAL LINE
+        └── 12345\
+            └── ...
 ```
+
+### Range folder formula
+Groups job numbers into bands of 5 based on the **first 3 digits**:
+- `ceil(prefix / 5)` → n; start = `5*(n-1)+1`, end = `5*n`
+- Example: job `12345` → prefix `123` → n=25 → folder `121-125`
 
 ### Revision archiving
-Before writing new files the macro scans the drawing folder (and the `DXF\` sub-folder) for any file matching `<DrawingName>-Rev*.pdf/.dwg/.dxf` that is **not** the current revision, and moves them to `History\`. If a file with the same name already exists in `History\` it is renamed with a timestamp (`_YYYYMMDD_HHmmss`) so nothing is lost.
+Before writing new files the macro scans the drawing folder (and `DXF\`) for any file matching `<DrawingName>-Rev*.pdf/.dwg/.dxf` that is **not** the current revision and moves them to `History\`. Timestamp-suffix prevents collisions in `History\`.
 
 ### DXF folder
-If the `DXF\` sub-folder does not exist, it is created automatically before saving the DXF.
+`DXF\` is created automatically if it does not exist.
 
----
-
-## Folder Architecture (TBD)
-The current baseline saves all files relative to the drawing's own folder. Once you provide your folder architecture, the path logic in `SaveAs_Export.bas` (`drawingFolder` variable and the functions that follow) will be updated to route files to the correct locations automatically.
+### Path validation
+If the drawing is not inside `Z:\Solidworks\Current\JOBS` or is not under a recognised job-type folder, the macro will warn and ask whether to continue.

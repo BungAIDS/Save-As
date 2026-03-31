@@ -19,24 +19,30 @@ Attribute VB_Exposed = False
 '
 ' Controls (add these in the VBA UserForm designer):
 '
-'   lblTitle        Label       "Save-As Export Utility"  (bold, large)
-'   lblDrawing      Label       "Drawing:"
-'   lblDrawingName  Label       (populated at runtime with drawing base name)
-'   lblRevision     Label       "Revision Letter:"
-'   txtRevision     TextBox     (user types A, B, C …)
-'   fraFormats      Frame       "Export Formats"
-'     chkPDF        CheckBox    "PDF"
-'     chkDWG        CheckBox    "DWG"
-'     chkDXF        CheckBox    "DXF"
-'   lblPreview      Label       "Output file name preview:"
-'   lblPreviewVal   Label       (populated at runtime)
-'   btnOK           CommandButton  "Export"
-'   btnCancel       CommandButton  "Cancel"
+'   lblTitle        Label          "Save-As Export Utility"  (bold, size 12)
+'   lblJobType      Label          "Job Type:"
+'   lblJobTypeVal   Label          (populated at runtime – e.g. "GENERAL LINE")
+'   lblFolder       Label          "Save folder:"
+'   lblFolderVal    Label          (populated at runtime – full path, WordWrap=True)
+'   lblDrawing      Label          "Drawing / Job #:"
+'   lblDrawingName  Label          (populated at runtime with drawing base name)
+'   lblRevision     Label          "Revision Letter:"
+'   txtRevision     TextBox        (user types A, B, C …  MaxLength=2)
+'   fraFormats      Frame          "Export Formats"
+'     chkPDF        CheckBox       "PDF (.pdf)"
+'     chkDWG        CheckBox       "AutoCAD DWG (.dwg)"
+'     chkDXF        CheckBox       "DXF (.dxf)  → saved in DXF\ sub-folder"
+'   lblPreview      Label          "Output file name preview:"
+'   lblPreviewVal   Label          (populated at runtime, WordWrap=True)
+'   btnOK           CommandButton  "Export"   Default=True
+'   btnCancel       CommandButton  "Cancel"   Cancel=True
 '==============================================================================
 Option Explicit
 
-' Public properties read by the caller
+' Public properties – set by caller before Show, read back after Hide
 Public DrawingBaseName As String
+Public JobType         As String   ' e.g. "GENERAL LINE", "HD-PFD", "HDX"
+Public DrawingFolder   As String   ' full path with trailing backslash
 Public RevisionLetter  As String
 Public ExportPDF       As Boolean
 Public ExportDWG       As Boolean
@@ -52,10 +58,11 @@ Private Sub UserForm_Initialize()
     chkDWG.Value = False
     chkDXF.Value = False
 
-    ' Show drawing name in the label
+    ' Populate read-only info labels
     lblDrawingName.Caption = DrawingBaseName
+    lblJobTypeVal.Caption  = IIf(JobType <> "", JobType, "(not detected)")
+    lblFolderVal.Caption   = IIf(DrawingFolder <> "", DrawingFolder, "(unknown)")
 
-    ' Clear preview
     UpdatePreview
 End Sub
 
