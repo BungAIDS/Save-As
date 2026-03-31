@@ -102,7 +102,7 @@ Sub main()
     End If
 
     '--- Show export dialog ---
-    Dim dlg As New ExportDialog
+    Dim dlg As New Export_Dialog
     dlg.DrawingBaseName = drawingBaseName
     dlg.JobType         = jobType
     dlg.DrawingFolder   = drawingFolder
