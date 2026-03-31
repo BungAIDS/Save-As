@@ -2,37 +2,36 @@
 ' SaveAs_Export.bas
 ' SolidWorks 2025 VBA Macro
 '
-' PURPOSE: Export an open .SLDDRW (format XXXXXX-YY) to PDF, DWG, and/or DXF
-'          with a revision suffix, saved to the corresponding AutoCAD job folder.
-'
-' DRAWING FILENAME FORMAT:  XXXXXX-YY.SLDDRW
+' DRAWING FILENAME FORMAT:  XXXXXX-YYA.SLDDRW
 '   XXXXXX = 6-digit job number  (used to locate the AutoCAD folder)
 '   YY     = sheet/detail number
+'   A      = revision letter (last character of base name)
 '
 ' OUTPUT FOLDER (all formats go to AutoCAD):
 '   PDF  →  Z:\AUTOCAD\CURRENT\JOBS\<type>\<intermediate>\<jobnum>\
 '   DWG  →  Z:\AUTOCAD\CURRENT\JOBS\<type>\<intermediate>\<jobnum>\
 '   DXF  →  Z:\AUTOCAD\CURRENT\JOBS\<type>\<intermediate>\<jobnum>\DXF\
 '
+' REVISION ARCHIVING:
+'   Old revisions of the same sheet are moved before new files are written:
+'   PDF/DWG  →  <jobnum>\History\
+'   DXF      →  <jobnum>\DXF\History\
+'
 ' SOLIDWORKS → AUTOCAD JOB TYPE MAPPING:
 '   GENERAL LINE  →  GENERAL LINE   (intermediate = first 3 digits, e.g. 420)
 '   HD-PFD        →  HD-PFD-IAF     (intermediate = first 3 digits)
 '   HDX           →  HDX            (intermediate = range folder, e.g. 416-420)
-'
-' REVISION ARCHIVING:
-'   Existing revision files in the AutoCAD job folder (and DXF sub-folder)
-'   are moved to a History\ sub-folder before new files are written.
 '==============================================================================
 Option Explicit
 
 '--- SolidWorks job root and folder type names ---
-Private Const SW_ROOT          As String = "Z:\Solidworks\Current\JOBS"
-Private Const JOBTYPE_GENLINE  As String = "GENERAL LINE"
-Private Const JOBTYPE_HDPFD    As String = "HD-PFD"
-Private Const JOBTYPE_HDX      As String = "HDX"
+Private Const SW_ROOT         As String = "Z:\Solidworks\Current\JOBS"
+Private Const JOBTYPE_GENLINE As String = "GENERAL LINE"
+Private Const JOBTYPE_HDPFD   As String = "HD-PFD"
+Private Const JOBTYPE_HDX     As String = "HDX"
 
 '--- AutoCAD job root and folder type names ---
-Private Const AC_ROOT          As String = "Z:\AUTOCAD\CURRENT\JOBS"
+Private Const AC_ROOT            As String = "Z:\AUTOCAD\CURRENT\JOBS"
 Private Const AC_JOBTYPE_GENLINE As String = "GENERAL LINE"
 Private Const AC_JOBTYPE_HDPFD   As String = "HD-PFD-IAF"
 Private Const AC_JOBTYPE_HDX     As String = "HDX"
@@ -74,7 +73,7 @@ Sub main()
         Exit Sub
     End If
 
-    '--- Parse folder and full base name (e.g. "420788-01") ---
+    '--- Parse folder and base name  e.g. "420788-01A" ---
     Dim drawingFolder   As String
     Dim drawingBaseName As String
 
@@ -82,16 +81,29 @@ Sub main()
     drawingBaseName = Mid(drawingPath, Len(drawingFolder) + 1)
     drawingBaseName = Left(drawingBaseName, InStrRev(drawingBaseName, ".") - 1)
 
-    '--- Extract job number (part before the first "-") ---
+    '--- Extract job number (XXXXXX = everything before the first "-") ---
     Dim jobNumber As String
     Dim dashPos   As Integer
     dashPos = InStr(drawingBaseName, "-")
     If dashPos > 1 Then
         jobNumber = Left(drawingBaseName, dashPos - 1)
     Else
-        ' No dash found – treat entire base name as the job number
         jobNumber = drawingBaseName
     End If
+
+    '--- Extract revision letter (last character of base name) ---
+    Dim revLetter As String
+    revLetter = Right(drawingBaseName, 1)
+    If Not (revLetter >= "A" And revLetter <= "Z") And _
+       Not (revLetter >= "a" And revLetter <= "z") Then
+        revLetter = "?"   ' unexpected format – show in dialog but allow continuing
+    End If
+    revLetter = UCase(revLetter)
+
+    '--- Base name without revision letter  e.g. "420788-01"
+    '    Used as the wildcard root when scanning for old revisions ---
+    Dim baseNoRev As String
+    baseNoRev = Left(drawingBaseName, Len(drawingBaseName) - 1)
 
     '--- Detect SW job type from path ---
     Dim swJobType As String
@@ -112,7 +124,7 @@ Sub main()
         If resp = vbNo Then Exit Sub
     End If
 
-    '--- Build the AutoCAD output folder from job number + job type ---
+    '--- Build AutoCAD output folder ---
     Dim acJobFolder As String
     acJobFolder = BuildAutoCADJobFolder(jobNumber, swJobType)
 
@@ -123,7 +135,7 @@ Sub main()
         Exit Sub
     End If
 
-    '--- Ensure the AutoCAD job folder exists ---
+    '--- Ensure AutoCAD job folder exists ---
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
     If Not fso.FolderExists(acJobFolder) Then
@@ -144,39 +156,29 @@ Sub main()
     dlg.DrawingBaseName = drawingBaseName
     dlg.JobType         = IIf(swJobType <> "", swJobType, "(unknown)")
     dlg.DrawingFolder   = acJobFolder
+    dlg.RevisionLetter  = revLetter
     dlg.Show
 
     If dlg.Cancelled Then Exit Sub
 
-    '--- Collect choices ---
-    Dim revLetter As String
-    Dim doPDF     As Boolean
-    Dim doDWG     As Boolean
-    Dim doDXF     As Boolean
-
-    revLetter = UCase(Trim(dlg.RevisionLetter))
-    doPDF     = dlg.ExportPDF
-    doDWG     = dlg.ExportDWG
-    doDXF     = dlg.ExportDXF
-
-    If revLetter = "" Then
-        MsgBox "No revision letter entered.  Export cancelled.", vbExclamation, "Save-As Export"
-        Exit Sub
-    End If
+    Dim doPDF As Boolean
+    Dim doDWG As Boolean
+    Dim doDXF As Boolean
+    doPDF = dlg.ExportPDF
+    doDWG = dlg.ExportDWG
+    doDXF = dlg.ExportDXF
 
     If Not doPDF And Not doDWG And Not doDXF Then
         MsgBox "No export format selected.  Please check at least one box.", vbExclamation, "Save-As Export"
         Exit Sub
     End If
 
-    '--- Build export root name  e.g. "420788-01-RevA" ---
-    Dim exportRoot As String
-    exportRoot = drawingBaseName & "-Rev" & revLetter
+    '--- Archive old revisions of the same sheet ---
+    '    Scans for <baseNoRev>*.ext  (e.g. "420788-01*.pdf") and moves any
+    '    file that doesn't match the current full base name to History\
+    ArchiveOldRevisions acJobFolder, baseNoRev, drawingBaseName
 
-    '--- Archive previous revisions in the AutoCAD folder ---
-    ArchiveOldRevisions acJobFolder, drawingBaseName, exportRoot
-
-    '--- Export ---
+    '--- Export (filename = full drawing base name, no extra suffix) ---
     Dim errors   As Long
     Dim warnings As Long
     Dim outPath  As String
@@ -185,7 +187,7 @@ Sub main()
     results = ""
 
     If doPDF Then
-        outPath = acJobFolder & exportRoot & ".pdf"
+        outPath = acJobFolder & drawingBaseName & ".pdf"
         ok = ExportToPDF(swDraw, outPath, errors, warnings)
         If ok Then
             results = results & "  PDF: " & outPath & vbCrLf
@@ -196,7 +198,7 @@ Sub main()
     End If
 
     If doDWG Then
-        outPath = acJobFolder & exportRoot & ".dwg"
+        outPath = acJobFolder & drawingBaseName & ".dwg"
         ok = ExportToDWG(swDraw, outPath, errors, warnings)
         If ok Then
             results = results & "  DWG: " & outPath & vbCrLf
@@ -209,7 +211,7 @@ Sub main()
     If doDXF Then
         Dim dxfFolder As String
         dxfFolder = EnsureDXFFolder(acJobFolder)
-        outPath = dxfFolder & exportRoot & ".dxf"
+        outPath = dxfFolder & drawingBaseName & ".dxf"
         ok = ExportToDXF(swDraw, outPath, errors, warnings)
         If ok Then
             results = results & "  DXF: " & outPath & vbCrLf
@@ -227,13 +229,9 @@ End Sub
 
 '==============================================================================
 ' BUILD AUTOCAD JOB FOLDER
-' Maps SW job type to AutoCAD job type, calculates the intermediate folder,
-' and returns the full AutoCAD job folder path (with trailing backslash).
-' Returns "" on error.
 '==============================================================================
 Private Function BuildAutoCADJobFolder(ByVal jobNumber As String, _
                                        ByVal swJobType As String) As String
-    ' Map SW job type → AutoCAD job type
     Dim acJobType As String
     Select Case UCase(swJobType)
         Case UCase(JOBTYPE_GENLINE) : acJobType = AC_JOBTYPE_GENLINE
@@ -244,16 +242,13 @@ Private Function BuildAutoCADJobFolder(ByVal jobNumber As String, _
             Exit Function
     End Select
 
-    ' Build intermediate folder
-    Dim intermediate As String
-    Dim prefix3      As String
-    Dim prefix3Int   As Long
-
     If Len(jobNumber) < 3 Then
         BuildAutoCADJobFolder = ""
         Exit Function
     End If
 
+    Dim prefix3    As String
+    Dim prefix3Int As Long
     prefix3 = Left(jobNumber, 3)
     If Not IsNumeric(prefix3) Then
         BuildAutoCADJobFolder = ""
@@ -261,14 +256,12 @@ Private Function BuildAutoCADJobFolder(ByVal jobNumber As String, _
     End If
     prefix3Int = CLng(prefix3)
 
+    Dim intermediate As String
     Select Case UCase(acJobType)
         Case UCase(AC_JOBTYPE_GENLINE), UCase(AC_JOBTYPE_HDPFD)
-            ' AutoCAD GENERAL LINE and HD-PFD-IAF use first 3 digits as intermediate
-            intermediate = prefix3
-
+            intermediate = prefix3                      ' e.g. "420"
         Case UCase(AC_JOBTYPE_HDX)
-            ' AutoCAD HDX uses range folder
-            intermediate = CalculateRange(prefix3Int)
+            intermediate = CalculateRange(prefix3Int)   ' e.g. "416-420"
     End Select
 
     BuildAutoCADJobFolder = AC_ROOT & "\" & acJobType & "\" & intermediate & "\" & jobNumber & "\"
@@ -295,7 +288,6 @@ End Function
 Private Function DetectJobType(ByVal folderPath As String) As String
     Dim p As String
     p = LCase(folderPath)
-
     If InStr(p, "\" & LCase(JOBTYPE_GENLINE) & "\") > 0 Then
         DetectJobType = JOBTYPE_GENLINE
     ElseIf InStr(p, "\" & LCase(JOBTYPE_HDPFD) & "\") > 0 Then
@@ -316,51 +308,59 @@ Public Function CalculateRange(ByVal prefix3 As Long) As String
     Dim n      As Long
     Dim start  As Long
     Dim finish As Long
-
     n      = CLng(Int((prefix3 + 4) / 5))
     start  = 5 * (n - 1) + 1
     finish = 5 * n
-
     If start = 401 And finish = 405 Then start = 400
-
     CalculateRange = CStr(start) & "-" & CStr(finish)
 End Function
 
 '==============================================================================
-' ARCHIVE old revision files → <acJobFolder>\History\
-' Scans the AutoCAD job folder and DXF sub-folder for any file matching
-' <baseName>-Rev*.ext that is NOT the current revision, and moves them.
+' ARCHIVE old revisions of the same sheet
+'
+'   folder      = AutoCAD job folder (with trailing \)
+'   baseNoRev   = drawing base name minus revision letter, e.g. "420788-01"
+'   currentBase = full current base name, e.g. "420788-01A"
+'
+'   PDF/DWG old revisions → <jobfolder>\History\
+'   DXF old revisions     → <jobfolder>\DXF\History\
 '==============================================================================
 Private Sub ArchiveOldRevisions(ByVal folder As String, _
-                                ByVal baseName As String, _
-                                ByVal currentRoot As String)
-
-    Dim histFolder As String
-    histFolder = folder & "History\"
+                                ByVal baseNoRev As String, _
+                                ByVal currentBase As String)
 
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
 
-    Dim exts(1)  As String
-    exts(0) = "pdf"
-    exts(1) = "dwg"
+    Dim histFolder    As String
+    Dim dxfFolder     As String
+    Dim dxfHistFolder As String
+    histFolder    = folder & "History\"
+    dxfFolder     = folder & "DXF\"
+    dxfHistFolder = dxfFolder & "History\"
 
-    Dim i        As Integer
     Dim fileName As String
     Dim srcPath  As String
     Dim destPath As String
     Dim ts       As String
 
+    ' --- PDF and DWG in the main job folder ---
+    Dim exts(1) As String
+    exts(0) = "pdf"
+    exts(1) = "dwg"
+
+    Dim i As Integer
     For i = 0 To 1
-        fileName = Dir(folder & baseName & "-Rev*." & exts(i))
+        fileName = Dir(folder & baseNoRev & "*." & exts(i))
         Do While fileName <> ""
-            If LCase(Left(fileName, Len(currentRoot))) <> LCase(currentRoot) Then
+            ' Archive anything that isn't the current revision
+            If LCase(fso.GetBaseName(fileName)) <> LCase(currentBase) Then
                 If Not fso.FolderExists(histFolder) Then fso.CreateFolder histFolder
                 srcPath  = folder & fileName
                 destPath = histFolder & fileName
                 If fso.FileExists(destPath) Then
                     ts       = Format(Now, "YYYYMMDD_HHmmss")
-                    destPath = histFolder & fso.GetBaseName(destPath) & "_" & ts & "." & fso.GetExtensionName(destPath)
+                    destPath = histFolder & fso.GetBaseName(fileName) & "_" & ts & "." & exts(i)
                 End If
                 fso.MoveFile srcPath, destPath
             End If
@@ -368,19 +368,17 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
         Loop
     Next i
 
-    ' DXF sub-folder
-    Dim dxfFolder As String
-    dxfFolder = folder & "DXF\"
+    ' --- DXF in the DXF sub-folder → DXF\History\ ---
     If fso.FolderExists(dxfFolder) Then
-        fileName = Dir(dxfFolder & baseName & "-Rev*.dxf")
+        fileName = Dir(dxfFolder & baseNoRev & "*.dxf")
         Do While fileName <> ""
-            If LCase(Left(fileName, Len(currentRoot))) <> LCase(currentRoot) Then
-                If Not fso.FolderExists(histFolder) Then fso.CreateFolder histFolder
+            If LCase(fso.GetBaseName(fileName)) <> LCase(currentBase) Then
+                If Not fso.FolderExists(dxfHistFolder) Then fso.CreateFolder dxfHistFolder
                 srcPath  = dxfFolder & fileName
-                destPath = histFolder & fileName
+                destPath = dxfHistFolder & fileName
                 If fso.FileExists(destPath) Then
                     ts       = Format(Now, "YYYYMMDD_HHmmss")
-                    destPath = histFolder & fso.GetBaseName(destPath) & "_" & ts & "." & fso.GetExtensionName(destPath)
+                    destPath = dxfHistFolder & fso.GetBaseName(fileName) & "_" & ts & ".dxf"
                 End If
                 fso.MoveFile srcPath, destPath
             End If
@@ -392,7 +390,7 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
 End Sub
 
 '==============================================================================
-' ENSURE DXF FOLDER  (creates DXF\ inside the AutoCAD job folder if absent)
+' ENSURE DXF FOLDER
 '==============================================================================
 Private Function EnsureDXFFolder(ByVal jobFolder As String) As String
     Dim dxfPath As String

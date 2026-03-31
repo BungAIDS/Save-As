@@ -42,8 +42,8 @@ Option Explicit
 ' Public properties – set by caller before Show, read back after Hide
 Public DrawingBaseName As String
 Public JobType         As String   ' e.g. "GENERAL LINE", "HD-PFD", "HDX"
-Public DrawingFolder   As String   ' full path with trailing backslash
-Public RevisionLetter  As String
+Public DrawingFolder   As String   ' AutoCAD output folder (full path, trailing \)
+Public RevisionLetter  As String   ' set by caller (read from filename); read-only in dialog
 Public ExportPDF       As Boolean
 Public ExportDWG       As Boolean
 Public ExportDXF       As Boolean
@@ -53,7 +53,6 @@ Public Cancelled       As Boolean
 Private Sub UserForm_Initialize()
     Cancelled = False
 
-    ' Pre-tick PDF as the most common choice
     chkPDF.Value = True
     chkDWG.Value = False
     chkDXF.Value = False
@@ -63,38 +62,28 @@ Private Sub UserForm_Initialize()
     lblJobTypeVal.Caption  = IIf(JobType <> "", JobType, "(not detected)")
     lblFolderVal.Caption   = IIf(DrawingFolder <> "", DrawingFolder, "(unknown)")
 
+    ' Revision is read from the filename – show it but don't let user edit it
+    ' (txtRevision is renamed to lblRevisionVal in the designer: change it to
+    '  a Label with the same position, or set Enabled=False / Locked=True)
+    txtRevision.Text    = RevisionLetter
+    txtRevision.Enabled = False
+    txtRevision.Locked  = True
+
     UpdatePreview
 End Sub
 
 '------------------------------------------------------------------------------
-' Live preview of the output filename as the user types the revision
-'------------------------------------------------------------------------------
-Private Sub txtRevision_Change()
-    UpdatePreview
-End Sub
-
-Private Sub chkPDF_Click()  : UpdatePreview : End Sub
-Private Sub chkDWG_Click()  : UpdatePreview : End Sub
-Private Sub chkDXF_Click()  : UpdatePreview : End Sub
+Private Sub chkPDF_Click() : UpdatePreview : End Sub
+Private Sub chkDWG_Click() : UpdatePreview : End Sub
+Private Sub chkDXF_Click() : UpdatePreview : End Sub
 
 Private Sub UpdatePreview()
-    Dim rev As String
-    rev = UCase(Trim(txtRevision.Text))
-
-    If rev = "" Then
-        lblPreviewVal.Caption = "(enter a revision letter above)"
-        Exit Sub
-    End If
-
-    Dim root As String
-    root = DrawingBaseName & "-Rev" & rev
-
     Dim parts As String
     parts = ""
 
-    If chkPDF.Value Then parts = parts & root & ".pdf" & vbCrLf
-    If chkDWG.Value Then parts = parts & root & ".dwg" & vbCrLf
-    If chkDXF.Value Then parts = parts & "DXF\" & root & ".dxf" & vbCrLf
+    If chkPDF.Value Then parts = parts & DrawingBaseName & ".pdf" & vbCrLf
+    If chkDWG.Value Then parts = parts & DrawingBaseName & ".dwg" & vbCrLf
+    If chkDXF.Value Then parts = parts & "DXF\" & DrawingBaseName & ".dxf" & vbCrLf
 
     If parts = "" Then
         lblPreviewVal.Caption = "(select at least one format)"
@@ -104,52 +93,19 @@ Private Sub UpdatePreview()
 End Sub
 
 '------------------------------------------------------------------------------
-' OK / Export button
+' Export button
 '------------------------------------------------------------------------------
 Private Sub btnOK_Click()
-    ' Validate revision letter - must be a single alpha character
-    Dim rev As String
-    rev = UCase(Trim(txtRevision.Text))
-
-    If Len(rev) = 0 Then
-        MsgBox "Please enter a revision letter (e.g. A, B, C).", _
-               vbExclamation, "Save-As Export"
-        txtRevision.SetFocus
-        Exit Sub
-    End If
-
-    If Len(rev) > 2 Then
-        MsgBox "Revision should be one or two characters (e.g. A or AA).", _
-               vbExclamation, "Save-As Export"
-        txtRevision.SetFocus
-        Exit Sub
-    End If
-
-    ' Check that all chars are alphabetic
-    Dim i As Integer
-    For i = 1 To Len(rev)
-        Dim c As String
-        c = Mid(rev, i, 1)
-        If (c < "A" Or c > "Z") Then
-            MsgBox "Revision must contain only letters (A-Z).", _
-                   vbExclamation, "Save-As Export"
-            txtRevision.SetFocus
-            Exit Sub
-        End If
-    Next i
-
     If Not chkPDF.Value And Not chkDWG.Value And Not chkDXF.Value Then
         MsgBox "Please select at least one export format.", _
                vbExclamation, "Save-As Export"
         Exit Sub
     End If
 
-    ' Store values for caller
-    RevisionLetter = rev
-    ExportPDF      = chkPDF.Value
-    ExportDWG      = chkDWG.Value
-    ExportDXF      = chkDXF.Value
-    Cancelled      = False
+    ExportPDF = chkPDF.Value
+    ExportDWG = chkDWG.Value
+    ExportDXF = chkDXF.Value
+    Cancelled = False
 
     Me.Hide
 End Sub
