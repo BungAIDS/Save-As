@@ -235,6 +235,8 @@ Sub main()
 
     If results <> "" Then
         MsgBox "Export complete!" & vbCrLf & vbCrLf & results, vbInformation, "Save-As Export"
+        ' Open the AutoCAD job folder in Windows Explorer
+        Shell "explorer.exe """ & acJobFolder & """", vbNormalFocus
     End If
 
 End Sub
