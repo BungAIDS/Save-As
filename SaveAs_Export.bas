@@ -200,6 +200,7 @@ Sub main()
 
     If doPDF Then
         outPath = acJobFolder & exportBase & ".pdf"
+        If Not ClearToWrite(outPath) Then GoTo SkipPDF
         ok = ExportToPDF(swDraw, outPath, errors, warnings)
         If ok Then
             results = results & "  PDF: " & outPath & vbCrLf
@@ -207,10 +208,12 @@ Sub main()
             MsgBox "PDF export failed.  Errors: " & errors & "  Warnings: " & warnings, _
                    vbExclamation, "Save-As Export"
         End If
+        SkipPDF:
     End If
 
     If doDWG Then
         outPath = acJobFolder & exportBase & ".dwg"
+        If Not ClearToWrite(outPath) Then GoTo SkipDWG
         ok = ExportToDWG(swDraw, outPath, errors, warnings)
         If ok Then
             results = results & "  DWG: " & outPath & vbCrLf
@@ -218,12 +221,14 @@ Sub main()
             MsgBox "DWG export failed.  Errors: " & errors & "  Warnings: " & warnings, _
                    vbExclamation, "Save-As Export"
         End If
+        SkipDWG:
     End If
 
     If doDXF Then
         Dim dxfFolder As String
         dxfFolder = EnsureDXFFolder(acJobFolder)
         outPath = dxfFolder & exportBase & ".dxf"
+        If Not ClearToWrite(outPath) Then GoTo SkipDXF
         ok = ExportToDXF(swDraw, outPath, errors, warnings)
         If ok Then
             results = results & "  DXF: " & outPath & vbCrLf
@@ -231,6 +236,7 @@ Sub main()
             MsgBox "DXF export failed.  Errors: " & errors & "  Warnings: " & warnings, _
                    vbExclamation, "Save-As Export"
         End If
+        SkipDXF:
     End If
 
     If results <> "" Then
@@ -414,6 +420,42 @@ Private Function EnsureDXFFolder(ByVal jobFolder As String) As String
     If Not fso.FolderExists(dxfPath) Then fso.CreateFolder dxfPath
     Set fso = Nothing
     EnsureDXFFolder = dxfPath
+End Function
+
+'==============================================================================
+' CLEAR TO WRITE
+' Checks if a file exists and/or is read-only before exporting.
+' Returns True  = go ahead and write
+' Returns False = skip this file (user said No, or file is read-only)
+'==============================================================================
+Private Function ClearToWrite(ByVal filePath As String) As Boolean
+    Dim fso      As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    If Not fso.FileExists(filePath) Then
+        ' File doesn't exist – nothing to check
+        ClearToWrite = True
+        Set fso = Nothing
+        Exit Function
+    End If
+
+    ' Check read-only first – no point asking to overwrite if we can't
+    If fso.GetFile(filePath).Attributes And 1 Then
+        MsgBox fso.GetFileName(filePath) & " is read-only and cannot be overwritten.", _
+               vbExclamation, "Save-As Export – Read-Only File"
+        ClearToWrite = False
+        Set fso = Nothing
+        Exit Function
+    End If
+
+    ' File exists and is writable – ask user
+    Dim resp As Integer
+    resp = MsgBox(fso.GetFileName(filePath) & " already exists." & vbCrLf & vbCrLf & _
+                  "Would you like to overwrite it?", _
+                  vbQuestion + vbYesNo, "Save-As Export – File Exists")
+    ClearToWrite = (resp = vbYes)
+
+    Set fso = Nothing
 End Function
 
 '==============================================================================
