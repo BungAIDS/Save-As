@@ -200,43 +200,43 @@ Sub main()
 
     If doPDF Then
         outPath = acJobFolder & exportBase & ".pdf"
-        If Not ClearToWrite(outPath) Then GoTo SkipPDF
-        ok = ExportToPDF(swDraw, outPath, errors, warnings)
-        If ok Then
-            results = results & "  PDF: " & outPath & vbCrLf
-        Else
-            MsgBox "PDF export failed.  Errors: " & errors & "  Warnings: " & warnings, _
-                   vbExclamation, "Save-As Export"
+        If ClearToWrite(outPath) Then
+            ok = ExportToPDF(swDraw, outPath, errors, warnings)
+            If ok Then
+                results = results & "  PDF: " & outPath & vbCrLf
+            Else
+                MsgBox "PDF export failed.  Errors: " & errors & "  Warnings: " & warnings, _
+                       vbExclamation, "Save-As Export"
+            End If
         End If
-        SkipPDF:
     End If
 
     If doDWG Then
         outPath = acJobFolder & exportBase & ".dwg"
-        If Not ClearToWrite(outPath) Then GoTo SkipDWG
-        ok = ExportToDWG(swDraw, outPath, errors, warnings)
-        If ok Then
-            results = results & "  DWG: " & outPath & vbCrLf
-        Else
-            MsgBox "DWG export failed.  Errors: " & errors & "  Warnings: " & warnings, _
-                   vbExclamation, "Save-As Export"
+        If ClearToWrite(outPath) Then
+            ok = ExportToDWG(swDraw, outPath, errors, warnings)
+            If ok Then
+                results = results & "  DWG: " & outPath & vbCrLf
+            Else
+                MsgBox "DWG export failed.  Errors: " & errors & "  Warnings: " & warnings, _
+                       vbExclamation, "Save-As Export"
+            End If
         End If
-        SkipDWG:
     End If
 
     If doDXF Then
         Dim dxfFolder As String
         dxfFolder = EnsureDXFFolder(acJobFolder)
         outPath = dxfFolder & exportBase & ".dxf"
-        If Not ClearToWrite(outPath) Then GoTo SkipDXF
-        ok = ExportToDXF(swDraw, outPath, errors, warnings)
-        If ok Then
-            results = results & "  DXF: " & outPath & vbCrLf
-        Else
-            MsgBox "DXF export failed.  Errors: " & errors & "  Warnings: " & warnings, _
-                   vbExclamation, "Save-As Export"
+        If ClearToWrite(outPath) Then
+            ok = ExportToDXF(swDraw, outPath, errors, warnings)
+            If ok Then
+                results = results & "  DXF: " & outPath & vbCrLf
+            Else
+                MsgBox "DXF export failed.  Errors: " & errors & "  Warnings: " & warnings, _
+                       vbExclamation, "Save-As Export"
+            End If
         End If
-        SkipDXF:
     End If
 
     If results <> "" Then
