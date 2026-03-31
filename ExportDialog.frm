@@ -51,20 +51,20 @@ Public Cancelled       As Boolean
 
 '------------------------------------------------------------------------------
 Private Sub UserForm_Initialize()
-    Cancelled = False
+    ' Only set defaults here – properties set by caller are NOT available yet
+    Cancelled     = False
+    chkPDF.Value  = True
+    chkDWG.Value  = False
+    chkDXF.Value  = False
+    txtRevision.Text = ""
+End Sub
 
-    chkPDF.Value = True
-    chkDWG.Value = False
-    chkDXF.Value = False
-
-    ' Populate read-only info labels
-    lblDrawingName.Caption = DrawingBaseName
+Private Sub UserForm_Activate()
+    ' Properties set by caller ARE available here (fires when Show is called)
+    lblDrawingName.Caption = IIf(DrawingBaseName <> "", DrawingBaseName, "(unknown)")
     lblJobTypeVal.Caption  = IIf(JobType <> "", JobType, "(not detected)")
     lblFolderVal.Caption   = IIf(DrawingFolder <> "", DrawingFolder, "(unknown)")
-
-    txtRevision.Text = ""
     txtRevision.SetFocus
-
     UpdatePreview
 End Sub
 
