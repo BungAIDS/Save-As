@@ -78,11 +78,7 @@ Private Sub UpdatePreview()
     Dim rev As String
     rev = UCase(Trim(txtRevision.Text))
 
-    If rev = "" Then
-        lblPreviewVal.Caption = "(enter a revision letter above)"
-        Exit Sub
-    End If
-
+    ' rev="" is allowed – exports as drawing name with no revision suffix
     Dim exportBase As String
     exportBase = DrawingBaseName & rev
 
@@ -106,13 +102,7 @@ Private Sub btnOK_Click()
     Dim rev As String
     rev = UCase(Trim(txtRevision.Text))
 
-    If Len(rev) = 0 Then
-        MsgBox "Please enter a revision letter (e.g. A, B, C).", _
-               vbExclamation, "Save-As Export"
-        txtRevision.SetFocus
-        Exit Sub
-    End If
-
+    ' Blank revision is allowed – file saves as drawing name only (no suffix)
     If Len(rev) > 2 Then
         MsgBox "Revision should be one or two characters (e.g. A or AA).", _
                vbExclamation, "Save-As Export"
