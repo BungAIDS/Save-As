@@ -91,19 +91,9 @@ Sub main()
         jobNumber = drawingBaseName
     End If
 
-    '--- Extract revision letter (last character of base name) ---
+    '--- Revision letter is entered by the user in the dialog ---
     Dim revLetter As String
-    revLetter = Right(drawingBaseName, 1)
-    If Not (revLetter >= "A" And revLetter <= "Z") And _
-       Not (revLetter >= "a" And revLetter <= "z") Then
-        revLetter = "?"   ' unexpected format – show in dialog but allow continuing
-    End If
-    revLetter = UCase(revLetter)
-
-    '--- Base name without revision letter  e.g. "420788-01"
-    '    Used as the wildcard root when scanning for old revisions ---
-    Dim baseNoRev As String
-    baseNoRev = Left(drawingBaseName, Len(drawingBaseName) - 1)
+    revLetter = ""
 
     '--- Detect SW job type from path ---
     Dim swJobType As String
@@ -156,10 +146,11 @@ Sub main()
     dlg.DrawingBaseName = drawingBaseName
     dlg.JobType         = IIf(swJobType <> "", swJobType, "(unknown)")
     dlg.DrawingFolder   = acJobFolder
-    dlg.RevisionLetter  = revLetter
     dlg.Show
 
     If dlg.Cancelled Then Exit Sub
+
+    revLetter = dlg.RevisionLetter
 
     Dim doPDF As Boolean
     Dim doDWG As Boolean
@@ -173,12 +164,15 @@ Sub main()
         Exit Sub
     End If
 
-    '--- Archive old revisions of the same sheet ---
-    '    Scans for <baseNoRev>*.ext  (e.g. "420788-01*.pdf") and moves any
-    '    file that doesn't match the current full base name to History\
-    ArchiveOldRevisions acJobFolder, baseNoRev, drawingBaseName
+    '--- Export name = drawing base name + revision  e.g. "420788-01A" ---
+    Dim exportBase As String
+    exportBase = drawingBaseName & revLetter
 
-    '--- Export (filename = full drawing base name, no extra suffix) ---
+    '--- Archive any existing revision files for this sheet ---
+    '    Wildcard: drawingBaseName & "*.ext"  (e.g. "420788-01*.pdf")
+    '    Skip file whose base name matches exportBase
+    ArchiveOldRevisions acJobFolder, drawingBaseName, exportBase
+
     Dim errors   As Long
     Dim warnings As Long
     Dim outPath  As String
@@ -187,7 +181,7 @@ Sub main()
     results = ""
 
     If doPDF Then
-        outPath = acJobFolder & drawingBaseName & ".pdf"
+        outPath = acJobFolder & exportBase & ".pdf"
         ok = ExportToPDF(swDraw, outPath, errors, warnings)
         If ok Then
             results = results & "  PDF: " & outPath & vbCrLf
@@ -198,7 +192,7 @@ Sub main()
     End If
 
     If doDWG Then
-        outPath = acJobFolder & drawingBaseName & ".dwg"
+        outPath = acJobFolder & exportBase & ".dwg"
         ok = ExportToDWG(swDraw, outPath, errors, warnings)
         If ok Then
             results = results & "  DWG: " & outPath & vbCrLf
@@ -211,7 +205,7 @@ Sub main()
     If doDXF Then
         Dim dxfFolder As String
         dxfFolder = EnsureDXFFolder(acJobFolder)
-        outPath = dxfFolder & drawingBaseName & ".dxf"
+        outPath = dxfFolder & exportBase & ".dxf"
         ok = ExportToDXF(swDraw, outPath, errors, warnings)
         If ok Then
             results = results & "  DXF: " & outPath & vbCrLf
