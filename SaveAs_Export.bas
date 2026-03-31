@@ -406,25 +406,35 @@ End Function
 
 '==============================================================================
 ' CLEAR TO WRITE
-' Checks if a file exists and/or is read-only before exporting.
-' Returns True  = go ahead and write
-' Returns False = skip this file (user said No, or file is read-only)
+' Returns True  = safe to write
+' Returns False = skip this file (read-only, locked, or user said No)
 '==============================================================================
 Private Function ClearToWrite(ByVal filePath As String) As Boolean
-    Dim fso      As Object
+    Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
 
     If Not fso.FileExists(filePath) Then
-        ' File doesn't exist – nothing to check
         ClearToWrite = True
         Set fso = Nothing
         Exit Function
     End If
 
-    ' Check read-only first – no point asking to overwrite if we can't
-    If fso.GetFile(filePath).Attributes And 1 Then
-        MsgBox fso.GetFileName(filePath) & " is read-only and cannot be overwritten.", _
-               vbExclamation, "Save-As Export – Read-Only File"
+    Dim fileName As String
+    fileName = fso.GetFileName(filePath)
+
+    ' Try to open the file for writing – catches both read-only AND locked files
+    Dim fileNum As Integer
+    fileNum = FreeFile
+    On Error Resume Next
+    Open filePath For Append As #fileNum
+    Dim openErr As Long
+    openErr = Err.Number
+    Close #fileNum
+    On Error GoTo 0
+
+    If openErr <> 0 Then
+        MsgBox fileName & " is read-only or is open in another program and cannot be overwritten.", _
+               vbExclamation, "Save-As Export – File Locked"
         ClearToWrite = False
         Set fso = Nothing
         Exit Function
@@ -432,7 +442,7 @@ Private Function ClearToWrite(ByVal filePath As String) As Boolean
 
     ' File exists and is writable – ask user
     Dim resp As Integer
-    resp = MsgBox(fso.GetFileName(filePath) & " already exists." & vbCrLf & vbCrLf & _
+    resp = MsgBox(fileName & " already exists." & vbCrLf & vbCrLf & _
                   "Would you like to overwrite it?", _
                   vbQuestion + vbYesNo, "Save-As Export – File Exists")
     ClearToWrite = (resp = vbYes)
