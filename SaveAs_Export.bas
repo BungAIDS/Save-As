@@ -355,7 +355,6 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
     For i = 0 To 1
         fileName = Dir(folder & baseNoRev & "*." & exts(i))
         Do While fileName <> ""
-            ' Archive anything that isn't the current revision
             If LCase(fso.GetBaseName(fileName)) <> LCase(currentBase) Then
                 If Not fso.FolderExists(histFolder) Then fso.CreateFolder histFolder
                 srcPath  = folder & fileName
@@ -373,6 +372,12 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
                     Err.Clear
                 End If
                 On Error GoTo 0
+            End If
+            fileName = Dir()
+        Loop
+    Next i
+
+    ' --- DXF in the DXF sub-folder → DXF\History\ ---
     If fso.FolderExists(dxfFolder) Then
         fileName = Dir(dxfFolder & baseNoRev & "*.dxf")
         Do While fileName <> ""
@@ -393,6 +398,10 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
                     Err.Clear
                 End If
                 On Error GoTo 0
+            End If
+            fileName = Dir()
+        Loop
+    End If
 
     Set fso = Nothing
 End Sub
