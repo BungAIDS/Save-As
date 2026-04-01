@@ -364,13 +364,15 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
                     ts       = Format(Now, "YYYYMMDD_HHmmss")
                     destPath = histFolder & fso.GetBaseName(fileName) & "_" & ts & "." & exts(i)
                 End If
+                On Error Resume Next
                 fso.MoveFile srcPath, destPath
-            End If
-            fileName = Dir()
-        Loop
-    Next i
-
-    ' --- DXF in the DXF sub-folder → DXF\History\ ---
+                If Err.Number <> 0 Then
+                    MsgBox fileName & " could not be moved to History - it may be read-only or open in another program." & vbCrLf & _
+                           "Please close or unlock the file and move it manually.", _
+                           vbExclamation, "Save-As Export – Archive Warning"
+                    Err.Clear
+                End If
+                On Error GoTo 0
     If fso.FolderExists(dxfFolder) Then
         fileName = Dir(dxfFolder & baseNoRev & "*.dxf")
         Do While fileName <> ""
@@ -382,11 +384,15 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
                     ts       = Format(Now, "YYYYMMDD_HHmmss")
                     destPath = dxfHistFolder & fso.GetBaseName(fileName) & "_" & ts & ".dxf"
                 End If
+                On Error Resume Next
                 fso.MoveFile srcPath, destPath
-            End If
-            fileName = Dir()
-        Loop
-    End If
+                If Err.Number <> 0 Then
+                    MsgBox fileName & " could not be moved to History - it may be read-only or open in another program." & vbCrLf & _
+                           "Please close or unlock the file and move it manually.", _
+                           vbExclamation, "Save-As Export – Archive Warning"
+                    Err.Clear
+                End If
+                On Error GoTo 0
 
     Set fso = Nothing
 End Sub
