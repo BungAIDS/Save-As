@@ -468,16 +468,6 @@ Private Function ClearToWrite(ByVal filePath As String) As Boolean
     Set fso = Nothing
 End Function
 
-    ' File exists and is writable – ask user
-    Dim resp As Integer
-    resp = MsgBox(fileName & " already exists." & vbCrLf & vbCrLf & _
-                  "Would you like to overwrite it?", _
-                  vbQuestion + vbYesNo, "Save-As Export – File Exists")
-    ClearToWrite = (resp = vbYes)
-
-    Set fso = Nothing
-End Function
-
 '==============================================================================
 ' EXPORT – PDF  (all sheets)
 '==============================================================================
