@@ -337,9 +337,9 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
     Dim histFolder    As String
     Dim dxfFolder     As String
     Dim dxfHistFolder As String
-    histFolder    = folder & "History\"
+    histFolder    = folder & "HISTORY\"
     dxfFolder     = folder & "DXF\"
-    dxfHistFolder = dxfFolder & "History\"
+    dxfHistFolder = dxfFolder & "HISTORY\"
 
     Dim fileName As String
     Dim srcPath  As String
@@ -421,6 +421,8 @@ End Function
 
 '==============================================================================
 ' CLEAR TO WRITE
+' Always prompts the user before writing, whether or not the file exists.
+' Also checks for read-only / locked files before prompting.
 ' Returns True  = safe to write
 ' Returns False = skip this file (read-only, locked, or user said No)
 '==============================================================================
@@ -428,32 +430,43 @@ Private Function ClearToWrite(ByVal filePath As String) As Boolean
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
 
-    If Not fso.FileExists(filePath) Then
-        ClearToWrite = True
-        Set fso = Nothing
-        Exit Function
-    End If
-
     Dim fileName As String
     fileName = fso.GetFileName(filePath)
 
-    ' Try to open the file for writing – catches both read-only AND locked files
-    Dim fileNum As Integer
-    fileNum = FreeFile
-    On Error Resume Next
-    Open filePath For Append As #fileNum
-    Dim openErr As Long
-    openErr = Err.Number
-    Close #fileNum
-    On Error GoTo 0
+    ' If file exists, check it isn't locked or read-only before asking
+    If fso.FileExists(filePath) Then
+        Dim fileNum As Integer
+        fileNum = FreeFile
+        On Error Resume Next
+        Open filePath For Binary Access Read Write As #fileNum
+        Dim openErr As Long
+        openErr = Err.Number
+        Close #fileNum
+        On Error GoTo 0
 
-    If openErr <> 0 Then
-        MsgBox fileName & " is read-only or is open in another program and cannot be overwritten.", _
-               vbExclamation, "Save-As Export – File Locked"
-        ClearToWrite = False
-        Set fso = Nothing
-        Exit Function
+        If openErr <> 0 Then
+            MsgBox fileName & " is read-only or is open in another program and cannot be overwritten.", _
+                   vbExclamation, "Save-As Export – File Locked"
+            ClearToWrite = False
+            Set fso = Nothing
+            Exit Function
+        End If
     End If
+
+    ' Always ask before writing
+    Dim msg As String
+    If fso.FileExists(filePath) Then
+        msg = fileName & " already exists." & vbCrLf & vbCrLf & "Would you like to overwrite it?"
+    Else
+        msg = "Export " & fileName & "?"
+    End If
+
+    Dim resp As Integer
+    resp = MsgBox(msg, vbQuestion + vbYesNo, "Save-As Export – Confirm")
+    ClearToWrite = (resp = vbYes)
+
+    Set fso = Nothing
+End Function
 
     ' File exists and is writable – ask user
     Dim resp As Integer
