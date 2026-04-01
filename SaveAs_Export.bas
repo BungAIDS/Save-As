@@ -29,12 +29,14 @@ Private Const SW_ROOT         As String = "Z:\Solidworks\Current\JOBS"
 Private Const JOBTYPE_GENLINE As String = "GENERAL LINE"
 Private Const JOBTYPE_HDPFD   As String = "HD-PFD"
 Private Const JOBTYPE_HDX     As String = "HDX"
+Private Const JOBTYPE_AXIAL   As String = "AXIAL"
 
 '--- AutoCAD job root and folder type names ---
 Private Const AC_ROOT            As String = "Z:\AUTOCAD\CURRENT\JOBS"
 Private Const AC_JOBTYPE_GENLINE As String = "GENERAL LINE"
 Private Const AC_JOBTYPE_HDPFD   As String = "HD-PFD-IAF"
 Private Const AC_JOBTYPE_HDX     As String = "HDX"
+Private Const AC_JOBTYPE_AXIAL   As String = "AXIAL"
 
 '==============================================================================
 ' ENTRY POINT
@@ -239,6 +241,7 @@ Private Function BuildAutoCADJobFolder(ByVal jobNumber As String, _
         Case UCase(JOBTYPE_GENLINE) : acJobType = AC_JOBTYPE_GENLINE
         Case UCase(JOBTYPE_HDPFD)   : acJobType = AC_JOBTYPE_HDPFD
         Case UCase(JOBTYPE_HDX)     : acJobType = AC_JOBTYPE_HDX
+        Case UCase(JOBTYPE_AXIAL)   : acJobType = AC_JOBTYPE_AXIAL
         Case Else
             BuildAutoCADJobFolder = ""
             Exit Function
@@ -260,7 +263,7 @@ Private Function BuildAutoCADJobFolder(ByVal jobNumber As String, _
 
     Dim intermediate As String
     Select Case UCase(acJobType)
-        Case UCase(AC_JOBTYPE_GENLINE), UCase(AC_JOBTYPE_HDPFD)
+        Case UCase(AC_JOBTYPE_GENLINE), UCase(AC_JOBTYPE_HDPFD), UCase(AC_JOBTYPE_AXIAL)
             intermediate = prefix3                      ' e.g. "420"
         Case UCase(AC_JOBTYPE_HDX)
             intermediate = CalculateRange(prefix3Int)   ' e.g. "416-420"
@@ -296,6 +299,8 @@ Private Function DetectJobType(ByVal folderPath As String) As String
         DetectJobType = JOBTYPE_HDPFD
     ElseIf InStr(p, "\" & LCase(JOBTYPE_HDX) & "\") > 0 Then
         DetectJobType = JOBTYPE_HDX
+    ElseIf InStr(p, "\" & LCase(JOBTYPE_AXIAL) & "\") > 0 Then
+        DetectJobType = JOBTYPE_AXIAL
     Else
         DetectJobType = ""
     End If
