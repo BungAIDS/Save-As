@@ -453,17 +453,16 @@ Private Function ClearToWrite(ByVal filePath As String) As Boolean
         End If
     End If
 
-    ' Always ask before writing
-    Dim msg As String
+    ' Only prompt if the file already exists
     If fso.FileExists(filePath) Then
-        msg = fileName & " already exists." & vbCrLf & vbCrLf & "Would you like to overwrite it?"
+        Dim resp As Integer
+        resp = MsgBox(fileName & " already exists." & vbCrLf & vbCrLf & _
+                      "Would you like to overwrite it?", _
+                      vbQuestion + vbYesNo, "Save-As Export – Confirm")
+        ClearToWrite = (resp = vbYes)
     Else
-        msg = "Export " & fileName & "?"
+        ClearToWrite = True
     End If
-
-    Dim resp As Integer
-    resp = MsgBox(msg, vbQuestion + vbYesNo, "Save-As Export – Confirm")
-    ClearToWrite = (resp = vbYes)
 
     Set fso = Nothing
 End Function
