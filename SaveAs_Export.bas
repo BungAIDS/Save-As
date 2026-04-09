@@ -519,13 +519,13 @@ Private Sub LogExport(ByVal jobNumber As String, _
     tMins  = totalRuns Mod 60
 
     Dim timeSaved As String
-    If tDays > 0 Then
-        timeSaved = tDays & " working days (8 hours each), " & tHours & " hours, " & tMins & " minutes"
-    ElseIf tHours > 0 Then
-        timeSaved = tHours & " hours, " & tMins & " minutes"
-    Else
-        timeSaved = tMins & " minutes"
-    End If
+    timeSaved = ""
+    If tDays > 0  Then timeSaved = timeSaved & tDays & " working days (8 hours each), "
+    If tHours > 0 Then timeSaved = timeSaved & tHours & " hours, "
+    If tMins > 0  Then timeSaved = timeSaved & tMins & " minutes"
+    ' Trim any trailing comma/space if minutes was zero
+    timeSaved = TrimRight(timeSaved, ", ")
+    If timeSaved = "" Then timeSaved = "0 minutes"
     xlWS.Cells(1, 4).Value = timeSaved
 
     ' --- Auto-fit ---
@@ -547,6 +547,17 @@ Private Sub LogExport(ByVal jobNumber As String, _
     Set fso   = Nothing
 
 End Sub
+
+'==============================================================================
+' TRIM RIGHT - removes a trailing substring from a string if present
+'==============================================================================
+Private Function TrimRight(ByVal s As String, ByVal suffix As String) As String
+    If Right(s, Len(suffix)) = suffix Then
+        TrimRight = Left(s, Len(s) - Len(suffix))
+    Else
+        TrimRight = s
+    End If
+End Function
 
 '==============================================================================
 ' ENSURE DXF FOLDER
