@@ -510,13 +510,21 @@ Private Sub LogExport(ByVal jobNumber As String, _
     xlWS.Cells(1, 2).Value = totalRuns
 
     ' Time saved: 1 minute per run
+    ' 1 run = 1 minute; break into days / hours / minutes
+    Dim tDays    As Long
+    Dim tHours   As Long
+    Dim tMins    As Long
+    tDays  = Int(totalRuns / 480)
+    tHours = Int((totalRuns Mod 480) / 60)
+    tMins  = totalRuns Mod 60
+
     Dim timeSaved As String
-    If totalRuns < 60 Then
-        timeSaved = totalRuns & " minutes"
-    ElseIf totalRuns < 480 Then
-        timeSaved = Int(totalRuns / 60) & " hours"
+    If tDays > 0 Then
+        timeSaved = tDays & " working days (8 hours each), " & tHours & " hours, " & tMins & " minutes"
+    ElseIf tHours > 0 Then
+        timeSaved = tHours & " hours, " & tMins & " minutes"
     Else
-        timeSaved = Int(totalRuns / 480) & " working days (8 hours)"
+        timeSaved = tMins & " minutes"
     End If
     xlWS.Cells(1, 4).Value = timeSaved
 
