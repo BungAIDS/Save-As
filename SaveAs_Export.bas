@@ -464,6 +464,13 @@ Private Sub LogExport(ByVal jobNumber As String, _
             GoTo Overflow
         End If
         On Error GoTo 0
+        ' Some Excel versions open locked files as read-only instead of erroring
+        If xlWB.ReadOnly Then
+            xlWB.Close False
+            xlApp.Quit
+            Set xlWB = Nothing : Set xlApp = Nothing
+            GoTo Overflow
+        End If
         Set xlWS = xlWB.Sheets(1)
         lastRow = xlWS.Cells(xlWS.Rows.Count, 1).End(-4162).Row + 1
         If lastRow < DATA_START Then lastRow = DATA_START
