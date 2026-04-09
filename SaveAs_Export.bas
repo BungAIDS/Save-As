@@ -520,10 +520,9 @@ Private Sub LogExport(ByVal jobNumber As String, _
 
     Dim timeSaved As String
     timeSaved = ""
-    If tDays > 0  Then timeSaved = timeSaved & tDays & " working days (8 hours each), "
-    If tHours > 0 Then timeSaved = timeSaved & tHours & " hours, "
-    If tMins > 0  Then timeSaved = timeSaved & tMins & " minutes"
-    ' Trim any trailing comma/space if minutes was zero
+    If tDays > 0  Then timeSaved = timeSaved & tDays & IIf(tDays = 1, " working day (8 hours each), ", " working days (8 hours each), ")
+    If tHours > 0 Then timeSaved = timeSaved & tHours & IIf(tHours = 1, " hour, ", " hours, ")
+    If tMins > 0  Then timeSaved = timeSaved & tMins & IIf(tMins = 1, " minute", " minutes")
     timeSaved = TrimRight(timeSaved, ", ")
     If timeSaved = "" Then timeSaved = "0 minutes"
     xlWS.Cells(1, 4).Value = timeSaved
