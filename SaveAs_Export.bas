@@ -416,7 +416,18 @@ End Sub
 '==============================================================================
 ' LOG EXPORT
 ' Appends one row to the shared Excel log file on the network.
-' Creates the file with headers if it doesn't exist yet.
+' Creates the file with summary block + headers if it doesn't exist yet.
+'
+' Layout:
+'   Row 1: Total Runs  | <count>  |  Time Saved  | <value>
+'   Row 2: (blank separator)
+'   Row 3: Headers (bold)
+'   Row 4+: Data
+'
+' Time Saved = 1 minute per run, displayed as:
+'   < 60 runs  → "X minutes"
+'   60-479     → "X.X hours"
+'   480+       → "X.X working days"
 '==============================================================================
 Private Sub LogExport(ByVal jobNumber As String, _
                       ByVal drawingName As String, _
@@ -425,55 +436,63 @@ Private Sub LogExport(ByVal jobNumber As String, _
                       ByVal didDWG As Boolean, _
                       ByVal didDXF As Boolean)
 
-    Const LOG_PATH As String = "Z:\Solidworks\Current\SaveAs_Log.xlsx"
+    Const LOG_PATH   As String = "Z:\Solidworks\Current\SaveAs_Log.xlsx"
+    Const HEADER_ROW As Long   = 3
+    Const DATA_START As Long   = 4
 
-    Dim xlApp  As Object
-    Dim xlWB   As Object
-    Dim xlWS   As Object
+    Dim xlApp   As Object
+    Dim xlWB    As Object
+    Dim xlWS    As Object
     Dim lastRow As Long
 
     On Error Resume Next
     Set xlApp = CreateObject("Excel.Application")
     If Err.Number <> 0 Or xlApp Is Nothing Then
-        ' Excel not available – silently skip logging
         On Error GoTo 0
         Exit Sub
     End If
     On Error GoTo 0
 
-    xlApp.Visible = False
+    xlApp.Visible       = False
     xlApp.DisplayAlerts = False
 
-    ' Open existing log or create a new one
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
 
     If fso.FileExists(LOG_PATH) Then
         Set xlWB = xlApp.Workbooks.Open(LOG_PATH)
         Set xlWS = xlWB.Sheets(1)
-        lastRow = xlWS.Cells(xlWS.Rows.Count, 1).End(-4162).Row + 1  ' -4162 = xlUp
+        ' Find last used row in data area (column A, from bottom)
+        lastRow = xlWS.Cells(xlWS.Rows.Count, 1).End(-4162).Row + 1
+        If lastRow < DATA_START Then lastRow = DATA_START
     Else
         Set xlWB = xlApp.Workbooks.Add
         Set xlWS = xlWB.Sheets(1)
         xlWS.Name = "Export Log"
 
-        ' Write headers
-        xlWS.Cells(1, 1).Value = "Date"
-        xlWS.Cells(1, 2).Value = "Time"
-        xlWS.Cells(1, 3).Value = "User"
-        xlWS.Cells(1, 4).Value = "Job Number"
-        xlWS.Cells(1, 5).Value = "Drawing"
-        xlWS.Cells(1, 6).Value = "Job Type"
-        xlWS.Cells(1, 7).Value = "PDF"
-        xlWS.Cells(1, 8).Value = "DWG"
-        xlWS.Cells(1, 9).Value = "DXF"
-
-        ' Bold the header row
+        ' --- Summary block (row 1) ---
+        xlWS.Cells(1, 1).Value = "Total Runs"
+        xlWS.Cells(1, 2).Value = 0
+        xlWS.Cells(1, 3).Value = "Time Saved"
+        xlWS.Cells(1, 4).Value = "0 minutes"
         xlWS.Rows(1).Font.Bold = True
-        lastRow = 2
+
+        ' --- Header row ---
+        xlWS.Cells(HEADER_ROW, 1).Value = "Date"
+        xlWS.Cells(HEADER_ROW, 2).Value = "Time"
+        xlWS.Cells(HEADER_ROW, 3).Value = "User"
+        xlWS.Cells(HEADER_ROW, 4).Value = "Job Number"
+        xlWS.Cells(HEADER_ROW, 5).Value = "Drawing"
+        xlWS.Cells(HEADER_ROW, 6).Value = "Job Type"
+        xlWS.Cells(HEADER_ROW, 7).Value = "PDF"
+        xlWS.Cells(HEADER_ROW, 8).Value = "DWG"
+        xlWS.Cells(HEADER_ROW, 9).Value = "DXF"
+        xlWS.Rows(HEADER_ROW).Font.Bold = True
+
+        lastRow = DATA_START
     End If
 
-    ' Write the new log entry
+    ' --- Append data row ---
     xlWS.Cells(lastRow, 1).Value = Format(Now, "YYYY-MM-DD")
     xlWS.Cells(lastRow, 2).Value = Format(Now, "HH:MM:SS")
     xlWS.Cells(lastRow, 3).Value = Environ("USERNAME")
@@ -484,14 +503,31 @@ Private Sub LogExport(ByVal jobNumber As String, _
     xlWS.Cells(lastRow, 8).Value = IIf(didDWG, "YES", "NO")
     xlWS.Cells(lastRow, 9).Value = IIf(didDXF, "YES", "NO")
 
-    ' Auto-fit columns
+    ' --- Update summary block ---
+    Dim totalRuns As Long
+    totalRuns = lastRow - DATA_START + 1   ' number of data rows including this one
+
+    xlWS.Cells(1, 2).Value = totalRuns
+
+    ' Time saved: 1 minute per run
+    Dim timeSaved As String
+    If totalRuns < 60 Then
+        timeSaved = totalRuns & " minutes"
+    ElseIf totalRuns < 480 Then
+        timeSaved = Format(totalRuns / 60, "0.0") & " hours"
+    Else
+        timeSaved = Format(totalRuns / 480, "0.0") & " working days"
+    End If
+    xlWS.Cells(1, 4).Value = timeSaved
+
+    ' --- Auto-fit ---
     xlWS.Columns("A:I").AutoFit
 
-    ' Save
+    ' --- Save ---
     If fso.FileExists(LOG_PATH) Then
         xlWB.Save
     Else
-        xlWB.SaveAs LOG_PATH, 51   ' 51 = xlOpenXMLWorkbook (.xlsx)
+        xlWB.SaveAs LOG_PATH, 51
     End If
 
     xlWB.Close False
