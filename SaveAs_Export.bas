@@ -227,6 +227,8 @@ Sub main()
         MsgBox "Export complete!" & vbCrLf & vbCrLf & results, vbInformation, "Save-As Export"
         ' Open the AutoCAD job folder in Windows Explorer
         Shell "explorer.exe """ & acJobFolder & """", vbNormalFocus
+        ' Log this run to the shared Excel log
+        LogExport jobNumber, drawingBaseName, swJobType, doPDF, doDWG, doDXF
     End If
 
 End Sub
@@ -409,6 +411,97 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
     End If
 
     Set fso = Nothing
+End Sub
+
+'==============================================================================
+' LOG EXPORT
+' Appends one row to the shared Excel log file on the network.
+' Creates the file with headers if it doesn't exist yet.
+'==============================================================================
+Private Sub LogExport(ByVal jobNumber As String, _
+                      ByVal drawingName As String, _
+                      ByVal jobType As String, _
+                      ByVal didPDF As Boolean, _
+                      ByVal didDWG As Boolean, _
+                      ByVal didDXF As Boolean)
+
+    Const LOG_PATH As String = "Z:\Solidworks\Current\SaveAs_Log.xlsx"
+
+    Dim xlApp  As Object
+    Dim xlWB   As Object
+    Dim xlWS   As Object
+    Dim lastRow As Long
+
+    On Error Resume Next
+    Set xlApp = CreateObject("Excel.Application")
+    If Err.Number <> 0 Or xlApp Is Nothing Then
+        ' Excel not available – silently skip logging
+        On Error GoTo 0
+        Exit Sub
+    End If
+    On Error GoTo 0
+
+    xlApp.Visible = False
+    xlApp.DisplayAlerts = False
+
+    ' Open existing log or create a new one
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    If fso.FileExists(LOG_PATH) Then
+        Set xlWB = xlApp.Workbooks.Open(LOG_PATH)
+        Set xlWS = xlWB.Sheets(1)
+        lastRow = xlWS.Cells(xlWS.Rows.Count, 1).End(-4162).Row + 1  ' -4162 = xlUp
+    Else
+        Set xlWB = xlApp.Workbooks.Add
+        Set xlWS = xlWB.Sheets(1)
+        xlWS.Name = "Export Log"
+
+        ' Write headers
+        xlWS.Cells(1, 1).Value = "Date"
+        xlWS.Cells(1, 2).Value = "Time"
+        xlWS.Cells(1, 3).Value = "User"
+        xlWS.Cells(1, 4).Value = "Job Number"
+        xlWS.Cells(1, 5).Value = "Drawing"
+        xlWS.Cells(1, 6).Value = "Job Type"
+        xlWS.Cells(1, 7).Value = "PDF"
+        xlWS.Cells(1, 8).Value = "DWG"
+        xlWS.Cells(1, 9).Value = "DXF"
+
+        ' Bold the header row
+        xlWS.Rows(1).Font.Bold = True
+        lastRow = 2
+    End If
+
+    ' Write the new log entry
+    xlWS.Cells(lastRow, 1).Value = Format(Now, "YYYY-MM-DD")
+    xlWS.Cells(lastRow, 2).Value = Format(Now, "HH:MM:SS")
+    xlWS.Cells(lastRow, 3).Value = Environ("USERNAME")
+    xlWS.Cells(lastRow, 4).Value = jobNumber
+    xlWS.Cells(lastRow, 5).Value = drawingName
+    xlWS.Cells(lastRow, 6).Value = jobType
+    xlWS.Cells(lastRow, 7).Value = IIf(didPDF, "YES", "NO")
+    xlWS.Cells(lastRow, 8).Value = IIf(didDWG, "YES", "NO")
+    xlWS.Cells(lastRow, 9).Value = IIf(didDXF, "YES", "NO")
+
+    ' Auto-fit columns
+    xlWS.Columns("A:I").AutoFit
+
+    ' Save
+    If fso.FileExists(LOG_PATH) Then
+        xlWB.Save
+    Else
+        xlWB.SaveAs LOG_PATH, 51   ' 51 = xlOpenXMLWorkbook (.xlsx)
+    End If
+
+    xlWB.Close False
+    xlApp.Quit
+
+    Set xlWS  = Nothing
+    Set xlWB  = Nothing
+    Set xlApp = Nothing
+    Set fso   = Nothing
+
 End Sub
 
 '==============================================================================
