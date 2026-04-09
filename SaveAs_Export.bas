@@ -227,7 +227,7 @@ Sub main()
         MsgBox "Export complete!" & vbCrLf & vbCrLf & results, vbInformation, "Save-As Export"
         ' Open the AutoCAD job folder in Windows Explorer
         Shell "explorer.exe """ & acJobFolder & """", vbNormalFocus
-        ' Log this run to the shared Excel log
+        ' Log this run to the shared log
         LogExport jobNumber, drawingBaseName, swJobType, doPDF, doDWG, doDXF
     End If
 
@@ -415,19 +415,17 @@ End Sub
 
 '==============================================================================
 ' LOG EXPORT
-' Appends one row to the shared Excel log file on the network.
-' Creates the file with summary block + headers if it doesn't exist yet.
+' Writes to a CSV file using plain VBA file I/O so the file is never
+' locked for more than a few milliseconds, allowing multiple users to
+' run the macro concurrently without conflicts.
 '
-' Layout:
-'   Row 1: Total Runs  | <count>  |  Time Saved  | <value>
-'   Row 2: (blank separator)
-'   Row 3: Headers (bold)
-'   Row 4+: Data
+' Layout (opens cleanly in Excel):
+'   Line 1: Summary  – Total Runs, <count>, Time Saved, <value>
+'   Line 2: (blank)
+'   Line 3: Column headers
+'   Line 4+: Data rows
 '
-' Time Saved = 1 minute per run, displayed as:
-'   < 60 runs  → "X minutes"
-'   60-479     → "X.X hours"
-'   480+       → "X.X working days"
+' Time Saved = 1 minute per run.
 '==============================================================================
 Private Sub LogExport(ByVal jobNumber As String, _
                       ByVal drawingName As String, _
@@ -436,115 +434,119 @@ Private Sub LogExport(ByVal jobNumber As String, _
                       ByVal didDWG As Boolean, _
                       ByVal didDXF As Boolean)
 
-    Const LOG_PATH   As String = "Z:\DAG\SOLIDWORKS MACRO\Save As\SaveAs_Log.xlsx"
-    Const HEADER_ROW As Long   = 3
-    Const DATA_START As Long   = 4
-
-    Dim xlApp   As Object
-    Dim xlWB    As Object
-    Dim xlWS    As Object
-    Dim lastRow As Long
-
-    On Error Resume Next
-    Set xlApp = CreateObject("Excel.Application")
-    If Err.Number <> 0 Or xlApp Is Nothing Then
-        On Error GoTo 0
-        Exit Sub
-    End If
-    On Error GoTo 0
-
-    xlApp.Visible       = False
-    xlApp.DisplayAlerts = False
+    Const LOG_PATH As String = "Z:\DAG\SOLIDWORKS MACRO\Save As\SaveAs_Log.csv"
 
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
 
-    If fso.FileExists(LOG_PATH) Then
-        Set xlWB = xlApp.Workbooks.Open(LOG_PATH)
-        Set xlWS = xlWB.Sheets(1)
-        ' Find last used row in data area (column A, from bottom)
-        lastRow = xlWS.Cells(xlWS.Rows.Count, 1).End(-4162).Row + 1
-        If lastRow < DATA_START Then lastRow = DATA_START
-    Else
-        Set xlWB = xlApp.Workbooks.Add
-        Set xlWS = xlWB.Sheets(1)
-        xlWS.Name = "Export Log"
+    Dim newEntry As String
+    newEntry = Format(Now, "YYYY-MM-DD") & "," & _
+               Format(Now, "HH:MM:SS") & "," & _
+               Environ("USERNAME") & "," & _
+               jobNumber & "," & drawingName & "," & jobType & "," & _
+               IIf(didPDF, "YES", "NO") & "," & _
+               IIf(didDWG, "YES", "NO") & "," & _
+               IIf(didDXF, "YES", "NO")
 
-        ' --- Summary block (row 1) ---
-        xlWS.Cells(1, 1).Value = "Total Runs"
-        xlWS.Cells(1, 2).Value = 0
-        xlWS.Cells(1, 3).Value = "Time Saved"
-        xlWS.Cells(1, 4).Value = "0 minutes"
-        xlWS.Rows(1).Font.Bold = True
-
-        ' --- Header row ---
-        xlWS.Cells(HEADER_ROW, 1).Value = "Date"
-        xlWS.Cells(HEADER_ROW, 2).Value = "Time"
-        xlWS.Cells(HEADER_ROW, 3).Value = "User"
-        xlWS.Cells(HEADER_ROW, 4).Value = "Job Number"
-        xlWS.Cells(HEADER_ROW, 5).Value = "Drawing"
-        xlWS.Cells(HEADER_ROW, 6).Value = "Job Type"
-        xlWS.Cells(HEADER_ROW, 7).Value = "PDF"
-        xlWS.Cells(HEADER_ROW, 8).Value = "DWG"
-        xlWS.Cells(HEADER_ROW, 9).Value = "DXF"
-        xlWS.Rows(HEADER_ROW).Font.Bold = True
-
-        lastRow = DATA_START
+    '--- If file doesn't exist, create it fresh with summary + headers ---
+    If Not fso.FileExists(LOG_PATH) Then
+        Dim fn As Integer
+        fn = FreeFile
+        Open LOG_PATH For Output As #fn
+        Print #fn, "Total Runs,1,Time Saved,1 minute"
+        Print #fn, ""
+        Print #fn, "Date,Time,User,Job Number,Drawing,Job Type,PDF,DWG,DXF"
+        Print #fn, newEntry
+        Close #fn
+        Set fso = Nothing
+        Exit Sub
     End If
 
-    ' --- Append data row ---
-    xlWS.Cells(lastRow, 1).Value = Format(Now, "YYYY-MM-DD")
-    xlWS.Cells(lastRow, 2).Value = Format(Now, "HH:MM:SS")
-    xlWS.Cells(lastRow, 3).Value = Environ("USERNAME")
-    xlWS.Cells(lastRow, 4).Value = jobNumber
-    xlWS.Cells(lastRow, 5).Value = drawingName
-    xlWS.Cells(lastRow, 6).Value = jobType
-    xlWS.Cells(lastRow, 7).Value = IIf(didPDF, "YES", "NO")
-    xlWS.Cells(lastRow, 8).Value = IIf(didDWG, "YES", "NO")
-    xlWS.Cells(lastRow, 9).Value = IIf(didDXF, "YES", "NO")
-
-    ' --- Update summary block ---
+    '--- File exists: read all lines, count data rows, build updated summary ---
+    Dim lines()   As String
+    Dim allText   As String
     Dim totalRuns As Long
-    totalRuns = lastRow - DATA_START + 1   ' number of data rows including this one
 
-    xlWS.Cells(1, 2).Value = totalRuns
+    ' Read with retry in case another user is writing at this exact moment
+    Dim attempt As Integer
+    For attempt = 1 To 5
+        On Error Resume Next
+        fn = FreeFile
+        Open LOG_PATH For Input As #fn
+        If Err.Number = 0 Then
+            allText = Input(LOF(fn), fn)
+            Close #fn
+            On Error GoTo 0
+            Exit For
+        End If
+        Close #fn
+        On Error GoTo 0
+        Wait 500   ' wait 0.5s before retrying
+    Next attempt
 
-    ' Time saved: 1 minute per run
-    ' 1 run = 1 minute; break into days / hours / minutes
-    Dim tDays    As Long
-    Dim tHours   As Long
-    Dim tMins    As Long
-    tDays  = Int(totalRuns / 480)
-    tHours = Int((totalRuns Mod 480) / 60)
-    tMins  = totalRuns Mod 60
+    If allText = "" Then
+        Set fso = Nothing
+        Exit Sub   ' give up silently if we still can't read
+    End If
+
+    lines = Split(allText, vbCrLf)
+
+    ' Count data rows (everything after the 3-line header block)
+    Dim i As Integer
+    totalRuns = 0
+    For i = 3 To UBound(lines)
+        If Trim(lines(i)) <> "" Then totalRuns = totalRuns + 1
+    Next i
+    totalRuns = totalRuns + 1   ' include this new entry
+
+    '--- Build updated time saved string ---
+    Dim tDays  As Long : tDays  = Int(totalRuns / 480)
+    Dim tHours As Long : tHours = Int((totalRuns Mod 480) / 60)
+    Dim tMins  As Long : tMins  = totalRuns Mod 60
 
     Dim timeSaved As String
     timeSaved = ""
-    If tDays > 0  Then timeSaved = timeSaved & tDays & IIf(tDays = 1, " working day (8 hours each), ", " working days (8 hours each), ")
-    If tHours > 0 Then timeSaved = timeSaved & tHours & IIf(tHours = 1, " hour, ", " hours, ")
-    If tMins > 0  Then timeSaved = timeSaved & tMins & IIf(tMins = 1, " minute", " minutes")
+    If tDays > 0  Then timeSaved = timeSaved & tDays  & IIf(tDays = 1,  " working day (8 hours each), ",  " working days (8 hours each), ")
+    If tHours > 0 Then timeSaved = timeSaved & tHours & IIf(tHours = 1, " hour, ",  " hours, ")
+    If tMins > 0  Then timeSaved = timeSaved & tMins  & IIf(tMins = 1,  " minute",  " minutes")
     timeSaved = TrimRight(timeSaved, ", ")
     If timeSaved = "" Then timeSaved = "0 minutes"
-    xlWS.Cells(1, 4).Value = timeSaved
 
-    ' --- Auto-fit ---
-    xlWS.Columns("A:I").AutoFit
+    '--- Write updated file then append new entry ---
+    ' Update summary line (line 0)
+    lines(0) = "Total Runs," & totalRuns & ",Time Saved," & timeSaved
 
-    ' --- Save ---
-    If fso.FileExists(LOG_PATH) Then
-        xlWB.Save
-    Else
-        xlWB.SaveAs LOG_PATH, 51
-    End If
+    ' Write back with retry
+    For attempt = 1 To 5
+        On Error Resume Next
+        fn = FreeFile
+        Open LOG_PATH For Output As #fn
+        If Err.Number = 0 Then
+            Dim j As Integer
+            For j = 0 To UBound(lines)
+                Print #fn, lines(j)
+            Next j
+            Print #fn, newEntry
+            Close #fn
+            On Error GoTo 0
+            Exit For
+        End If
+        Close #fn
+        On Error GoTo 0
+        Wait 500
+    Next attempt
 
-    xlWB.Close False
-    xlApp.Quit
+    Set fso = Nothing
 
-    Set xlWS  = Nothing
-    Set xlWB  = Nothing
-    Set xlApp = Nothing
-    Set fso   = Nothing
+End Sub
 
+'--- Small wait helper (milliseconds) ---
+Private Sub Wait(ByVal ms As Long)
+    Dim t As Single
+    t = Timer
+    Do While (Timer - t) * 1000 < ms
+        DoEvents
+    Loop
 End Sub
 
 '==============================================================================
