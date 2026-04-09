@@ -436,7 +436,7 @@ Private Sub LogExport(ByVal jobNumber As String, _
                       ByVal didDWG As Boolean, _
                       ByVal didDXF As Boolean)
 
-    Const LOG_PATH   As String = "Z:\Solidworks\Current\SaveAs_Log.xlsx"
+    Const LOG_PATH   As String = "Z:\DAG\SOLIDWORKS MACRO\Save As\SaveAs_Log.xlsx"
     Const HEADER_ROW As Long   = 3
     Const DATA_START As Long   = 4
 
