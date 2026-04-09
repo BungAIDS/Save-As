@@ -514,9 +514,9 @@ Private Sub LogExport(ByVal jobNumber As String, _
     If totalRuns < 60 Then
         timeSaved = totalRuns & " minutes"
     ElseIf totalRuns < 480 Then
-        timeSaved = Format(totalRuns / 60, "0.0") & " hours"
+        timeSaved = Int(totalRuns / 60) & " hours"
     Else
-        timeSaved = Format(totalRuns / 480, "0.0") & " working days"
+        timeSaved = Int(totalRuns / 480) & " working days (8 hours)"
     End If
     xlWS.Cells(1, 4).Value = timeSaved
 
