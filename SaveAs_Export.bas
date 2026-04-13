@@ -583,7 +583,7 @@ Private Sub DraftTransmittalEmail(ByVal jobNumber As String, ByVal revLetter As 
     Set olMail = olApp.CreateItem(0)   ' 0 = olMailItem
 
     olMail.To      = "ddecker@chicagoblower.com"
-    olMail.Subject = jobNumber
+    olMail.Subject = jobNumber & IIf(revLetter <> "", " Rev " & revLetter, "")
     olMail.Body    = body
     olMail.Display   ' Opens draft for review – does NOT send automatically
 
