@@ -233,7 +233,7 @@ Sub main()
         ' Log this run to the shared log
         LogExport jobNumber, drawingBaseName, swJobType, doPDF, doDWG, doDXF
         ' Draft transmittal e-mail if requested
-        If doEmail Then DraftTransmittalEmail jobNumber, revLetter
+        If doEmail Then DraftTransmittalEmail exportBase, revLetter
     End If
 
 End Sub
@@ -563,7 +563,7 @@ End Sub
 ' Opens a new Outlook e-mail addressed to Debbie Decker.
 ' Subject = job number; body uses "order" or "revision" based on revLetter.
 '==============================================================================
-Private Sub DraftTransmittalEmail(ByVal jobNumber As String, ByVal revLetter As String)
+Private Sub DraftTransmittalEmail(ByVal exportBase As String, ByVal revLetter As String)
     Dim orderOrRev As String
     orderOrRev = IIf(revLetter = "", "order", "revision")
 
@@ -583,7 +583,7 @@ Private Sub DraftTransmittalEmail(ByVal jobNumber As String, ByVal revLetter As 
     Set olMail = olApp.CreateItem(0)   ' 0 = olMailItem
 
     olMail.To      = "ddecker@chicagoblower.com"
-    olMail.Subject = jobNumber & IIf(revLetter <> "", " Rev " & revLetter, "")
+    olMail.Subject = exportBase
     olMail.Body    = body
     olMail.Display   ' Opens draft for review – does NOT send automatically
 
