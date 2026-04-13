@@ -34,6 +34,7 @@
 '     chkDXF        CheckBox       "DXF (.dxf)  → saved in DXF\ sub-folder"
 '   lblPreview      Label          "Output file name preview:"
 '   lblPreviewVal   Label          (populated at runtime, WordWrap=True)
+'   chkEmail        CheckBox       "Draft an e-mail to Debbie Decker for drawing transmittal?"
 '   btnOK           CommandButton  "Export"   Default=True
 '   btnCancel       CommandButton  "Cancel"   Cancel=True
 '==============================================================================
@@ -47,15 +48,17 @@ Public RevisionLetter  As String   ' set by caller (read from filename); read-on
 Public ExportPDF       As Boolean
 Public ExportDWG       As Boolean
 Public ExportDXF       As Boolean
+Public ExportEmail     As Boolean
 Public Cancelled       As Boolean
 
 '------------------------------------------------------------------------------
 Private Sub UserForm_Initialize()
     ' Only set defaults here – properties set by caller are NOT available yet
-    Cancelled     = False
-    chkPDF.Value  = True
-    chkDWG.Value  = False
-    chkDXF.Value  = False
+    Cancelled      = False
+    chkPDF.Value   = True
+    chkDWG.Value   = False
+    chkDXF.Value   = False
+    chkEmail.Value = False
     txtRevision.Text = ""
 End Sub
 
@@ -132,6 +135,7 @@ Private Sub btnOK_Click()
     ExportPDF      = chkPDF.Value
     ExportDWG      = chkDWG.Value
     ExportDXF      = chkDXF.Value
+    ExportEmail    = chkEmail.Value
     Cancelled      = False
 
     Me.Hide

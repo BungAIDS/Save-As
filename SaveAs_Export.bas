@@ -161,6 +161,9 @@ Sub main()
     doDWG = dlg.ExportDWG
     doDXF = dlg.ExportDXF
 
+    Dim doEmail As Boolean
+    doEmail = dlg.ExportEmail
+
     If Not doPDF And Not doDWG And Not doDXF Then
         MsgBox "No export format selected.  Please check at least one box.", vbExclamation, "Save-As Export"
         Exit Sub
@@ -229,6 +232,8 @@ Sub main()
         Shell "explorer.exe """ & acJobFolder & """", vbNormalFocus
         ' Log this run to the shared log
         LogExport jobNumber, drawingBaseName, swJobType, doPDF, doDWG, doDXF
+        ' Draft transmittal e-mail if requested
+        If doEmail Then DraftTransmittalEmail jobNumber, revLetter
     End If
 
 End Sub
@@ -552,6 +557,60 @@ Overflow:
 
     Set fso = Nothing
 End Sub
+
+'==============================================================================
+' DRAFT TRANSMITTAL E-MAIL
+' Opens a new Outlook e-mail addressed to Debbie Decker.
+' Subject = job number; body uses "order" or "revision" based on revLetter.
+'==============================================================================
+Private Sub DraftTransmittalEmail(ByVal jobNumber As String, ByVal revLetter As String)
+    Dim orderOrRev As String
+    orderOrRev = IIf(revLetter = "", "order", "revision")
+
+    Dim signOff As String
+    signOff = GetSignOffName()
+
+    Dim body As String
+    body = "Hi Debbie," & vbCrLf & vbCrLf & _
+           "This " & orderOrRev & " is ready for transmittal and close." & vbCrLf & vbCrLf & _
+           "Thanks,"
+    If signOff <> "" Then body = body & vbCrLf & signOff
+
+    On Error GoTo EmailErr
+    Dim olApp  As Object
+    Dim olMail As Object
+    Set olApp  = CreateObject("Outlook.Application")
+    Set olMail = olApp.CreateItem(0)   ' 0 = olMailItem
+
+    olMail.To      = "ddecker@chicagoblower.com"
+    olMail.Subject = jobNumber
+    olMail.Body    = body
+    olMail.Display   ' Opens draft for review – does NOT send automatically
+
+    Set olMail = Nothing
+    Set olApp  = Nothing
+    Exit Sub
+
+EmailErr:
+    MsgBox "Could not open Outlook to draft the transmittal e-mail." & vbCrLf & _
+           "Please make sure Outlook is installed and running.", _
+           vbExclamation, "Save-As Export – E-mail Error"
+    Set olMail = Nothing
+    Set olApp  = Nothing
+End Sub
+
+'--- Maps Windows username to first-name sign-off ---
+Private Function GetSignOffName() As String
+    Select Case LCase(Environ("USERNAME"))
+        Case "dgroth":    GetSignOffName = "Danny"
+        Case "llee":      GetSignOffName = "Latrell"
+        Case "somar":     GetSignOffName = "Syed"
+        Case "tsledz":    GetSignOffName = "Ted"
+        Case "csandoval": GetSignOffName = "Carlos"
+        Case "jbolda":    GetSignOffName = "Justin"
+        Case Else:        GetSignOffName = ""
+    End Select
+End Function
 
 '--- Builds the Time Saved display string from a run count ---
 Private Function BuildTimeSaved(ByVal totalRuns As Long) As String

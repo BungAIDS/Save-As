@@ -43,6 +43,7 @@ Open `ExportDialog` in the designer and add the following controls with the exac
 | CheckBox      | `chkDXF`         | DXF (.dxf) → saved in DXF\ sub-folder | Inside `fraFormats`           |
 | Label         | `lblPreview`     | Output file name preview:             |                                |
 | Label         | `lblPreviewVal`  | *(blank)*                             | Filled at runtime; WordWrap=True |
+| CheckBox      | `chkEmail`       | Draft an e-mail to Debbie Decker for drawing transmittal? | Default unchecked |
 | CommandButton | `btnOK`          | Export                                | Default = True                 |
 | CommandButton | `btnCancel`      | Cancel                                | Cancel = True                  |
 
