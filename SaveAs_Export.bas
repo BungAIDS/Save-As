@@ -758,7 +758,7 @@ Private Function ExportToSTEP(ByVal swApp As SldWorks.SldWorks, _
         ' by the API and returns error 1.
         ' swSaveAsPart_ExteriorFaces (1) merges all geometry into a single
         ' body and removes all component/feature names.
-        Dim swAssy As SldWorks.AssemblyDoc
+        Dim swAssy As Object
         Set swAssy = swModel
         saveOk = swAssy.SaveAsPart(tempPath, 1, errors)  ' 1 = swSaveAsPart_ExteriorFaces
     Else
