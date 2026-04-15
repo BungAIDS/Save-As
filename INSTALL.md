@@ -41,6 +41,7 @@ Open `ExportDialog` in the designer and add the following controls with the exac
 | CheckBox      | `chkPDF`         | PDF (.pdf)                            | Inside `fraFormats`            |
 | CheckBox      | `chkDWG`         | AutoCAD DWG (.dwg)                    | Inside `fraFormats`            |
 | CheckBox      | `chkDXF`         | DXF (.dxf) → saved in DXF\ sub-folder | Inside `fraFormats`           |
+| CheckBox      | `chkSTP`         | STEP AP203 (.step) → saved in 3D STEP FILE\ sub-folder | Inside `fraFormats` |
 | Label         | `lblPreview`     | Output file name preview:             |                                |
 | Label         | `lblPreviewVal`  | *(blank)*                             | Filled at runtime; WordWrap=True |
 | CheckBox      | `chkEmail`       | Draft an e-mail to Debbie Decker for drawing transmittal? | Default unchecked |

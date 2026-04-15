@@ -32,6 +32,7 @@
 '     chkPDF        CheckBox       "PDF (.pdf)"
 '     chkDWG        CheckBox       "AutoCAD DWG (.dwg)"
 '     chkDXF        CheckBox       "DXF (.dxf)  → saved in DXF\ sub-folder"
+'     chkSTP        CheckBox       "STEP AP203 (.step)  → saved in 3D STEP FILE\ sub-folder"
 '   lblPreview      Label          "Output file name preview:"
 '   lblPreviewVal   Label          (populated at runtime, WordWrap=True)
 '   chkEmail        CheckBox       "Draft an e-mail to Debbie Decker for drawing transmittal?"
@@ -48,6 +49,7 @@ Public RevisionLetter  As String   ' set by caller (read from filename); read-on
 Public ExportPDF       As Boolean
 Public ExportDWG       As Boolean
 Public ExportDXF       As Boolean
+Public ExportSTP       As Boolean
 Public ExportEmail     As Boolean
 Public Cancelled       As Boolean
 
@@ -58,6 +60,7 @@ Private Sub UserForm_Initialize()
     chkPDF.Value   = True
     chkDWG.Value   = False
     chkDXF.Value   = False
+    chkSTP.Value   = False
     chkEmail.Value = False
     txtRevision.Text = ""
 End Sub
@@ -76,6 +79,7 @@ Private Sub txtRevision_Change() : UpdatePreview : End Sub
 Private Sub chkPDF_Click()       : UpdatePreview : End Sub
 Private Sub chkDWG_Click()       : UpdatePreview : End Sub
 Private Sub chkDXF_Click()       : UpdatePreview : End Sub
+Private Sub chkSTP_Click()       : UpdatePreview : End Sub
 
 Private Sub UpdatePreview()
     Dim rev As String
@@ -90,6 +94,7 @@ Private Sub UpdatePreview()
     If chkPDF.Value Then parts = parts & exportBase & ".pdf" & vbCrLf
     If chkDWG.Value Then parts = parts & exportBase & ".dwg" & vbCrLf
     If chkDXF.Value Then parts = parts & "DXF\" & exportBase & ".dxf" & vbCrLf
+    If chkSTP.Value Then parts = parts & "3D STEP FILE\" & exportBase & ".step" & vbCrLf
 
     If parts = "" Then
         lblPreviewVal.Caption = "(select at least one format)"
@@ -135,6 +140,7 @@ Private Sub btnOK_Click()
     ExportPDF      = chkPDF.Value
     ExportDWG      = chkDWG.Value
     ExportDXF      = chkDXF.Value
+    ExportSTP      = chkSTP.Value
     ExportEmail    = chkEmail.Value
     Cancelled      = False
 

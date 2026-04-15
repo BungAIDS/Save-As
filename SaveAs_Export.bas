@@ -157,14 +157,16 @@ Sub main()
     Dim doPDF As Boolean
     Dim doDWG As Boolean
     Dim doDXF As Boolean
+    Dim doSTP As Boolean
     doPDF = dlg.ExportPDF
     doDWG = dlg.ExportDWG
     doDXF = dlg.ExportDXF
+    doSTP = dlg.ExportSTP
 
     Dim doEmail As Boolean
     doEmail = dlg.ExportEmail
 
-    If Not doPDF And Not doDWG And Not doDXF Then
+    If Not doPDF And Not doDWG And Not doDXF And Not doSTP Then
         MsgBox "No export format selected.  Please check at least one box.", vbExclamation, "Save-As Export"
         Exit Sub
     End If
@@ -222,6 +224,29 @@ Sub main()
             Else
                 MsgBox "DXF export failed.  Errors: " & errors & "  Warnings: " & warnings, _
                        vbExclamation, "Save-As Export"
+            End If
+        End If
+    End If
+
+    If doSTP Then
+        Dim stepFolder As String
+        stepFolder = EnsureSTEPFolder(acJobFolder)
+        outPath = stepFolder & exportBase & ".step"
+        If ClearToWrite(outPath) Then
+            Dim swRefModel As SldWorks.ModelDoc2
+            Set swRefModel = GetDrawingModel(swDraw)
+            If swRefModel Is Nothing Then
+                MsgBox "Could not find the referenced assembly or part for STEP export." & vbCrLf & _
+                       "Make sure the model is open and loaded.", _
+                       vbExclamation, "Save-As Export"
+            Else
+                ok = ExportToSTEP(swRefModel, outPath, errors, warnings)
+                If ok Then
+                    results = results & "  STEP: " & outPath & vbCrLf
+                Else
+                    MsgBox "STEP export failed.  Errors: " & errors & "  Warnings: " & warnings, _
+                           vbExclamation, "Save-As Export"
+                End If
             End If
         End If
     End If
@@ -388,6 +413,37 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
             fileName = Dir()
         Loop
     Next i
+
+    ' --- STEP in the 3D STEP FILE sub-folder → 3D STEP FILE\History\ ---
+    Dim stepFolder2    As String
+    Dim stepHistFolder As String
+    stepFolder2    = folder & "3D STEP FILE\"
+    stepHistFolder = stepFolder2 & "HISTORY\"
+
+    If fso.FolderExists(stepFolder2) Then
+        fileName = Dir(stepFolder2 & baseNoRev & "*.step")
+        Do While fileName <> ""
+            If LCase(fso.GetBaseName(fileName)) <> LCase(currentBase) Then
+                If Not fso.FolderExists(stepHistFolder) Then fso.CreateFolder stepHistFolder
+                srcPath  = stepFolder2 & fileName
+                destPath = stepHistFolder & fileName
+                If fso.FileExists(destPath) Then
+                    ts       = Format(Now, "YYYYMMDD_HHmmss")
+                    destPath = stepHistFolder & fso.GetBaseName(fileName) & "_" & ts & ".step"
+                End If
+                On Error Resume Next
+                fso.MoveFile srcPath, destPath
+                If Err.Number <> 0 Then
+                    MsgBox fileName & " could not be moved to History - it may be read-only or open in another program." & vbCrLf & _
+                           "Please close or unlock the file and move it manually.", _
+                           vbExclamation, "Save-As Export – Archive Warning"
+                    Err.Clear
+                End If
+                On Error GoTo 0
+            End If
+            fileName = Dir()
+        Loop
+    End If
 
     ' --- DXF in the DXF sub-folder → DXF\History\ ---
     If fso.FolderExists(dxfFolder) Then
@@ -622,6 +678,54 @@ Private Function GetSignOffName() As String
         Case "jbolda":    GetSignOffName = "Justin"
         Case Else:        GetSignOffName = ""
     End Select
+End Function
+
+'==============================================================================
+' ENSURE 3D STEP FILE FOLDER
+'==============================================================================
+Private Function EnsureSTEPFolder(ByVal jobFolder As String) As String
+    Dim stepPath As String
+    stepPath = jobFolder & "3D STEP FILE\"
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(stepPath) Then fso.CreateFolder stepPath
+    Set fso = Nothing
+    EnsureSTEPFolder = stepPath
+End Function
+
+'==============================================================================
+' GET REFERENCED MODEL FROM DRAWING
+' Returns the first referenced assembly or part found in the drawing views.
+'==============================================================================
+Private Function GetDrawingModel(ByVal swDraw As SldWorks.DrawingDoc) As SldWorks.ModelDoc2
+    Dim view    As SldWorks.View
+    Dim refDoc  As SldWorks.ModelDoc2
+    Set view = swDraw.GetFirstView()        ' First view is the sheet itself
+    If Not view Is Nothing Then Set view = view.GetNextView()  ' Skip to first real view
+    Do While Not view Is Nothing
+        Set refDoc = view.ReferencedDocument
+        If Not refDoc Is Nothing Then
+            Set GetDrawingModel = refDoc
+            Exit Function
+        End If
+        Set view = view.GetNextView()
+    Loop
+    Set GetDrawingModel = Nothing
+End Function
+
+'==============================================================================
+' EXPORT – STEP AP203
+' Exports the referenced assembly/part as STEP AP203.
+' AP version is controlled by SolidWorks Tools > Options > Import/Export > STEP.
+'==============================================================================
+Private Function ExportToSTEP(ByVal swModel As SldWorks.ModelDoc2, _
+                               ByVal outPath As String, _
+                               ByRef errors As Long, _
+                               ByRef warnings As Long) As Boolean
+    ExportToSTEP = swModel.Extension.SaveAs(outPath, _
+                                             swSaveAsCurrentVersion, _
+                                             swSaveAsOptions_Silent, _
+                                             Nothing, errors, warnings)
 End Function
 
 '==============================================================================
