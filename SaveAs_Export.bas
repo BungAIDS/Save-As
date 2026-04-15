@@ -248,7 +248,7 @@ Sub main()
                        "Make sure the model is open and loaded.", _
                        vbExclamation, "Save-As Export"
             Else
-                ok = ExportToSTEP(swApp, swRefModel, outPath, errors, warnings)
+                ok = ExportToSTEP(swRefModel, outPath, errors, warnings)
                 If ok Then
                     results = results & "  STEP: " & outPath & vbCrLf
                 Else
@@ -729,50 +729,19 @@ End Function
 
 '==============================================================================
 ' EXPORT – STEP AP203
-' Saves the referenced model as a temporary .sldprt, opens it, exports to STEP,
-' then closes and deletes the temp part.  This ensures a clean single-body STEP
-' regardless of whether the source is an assembly or a part.
+' Exports the referenced part or assembly directly to STEP.
+' STEP format supports both parts and assemblies natively, so no intermediate
+' conversion is needed.
 '==============================================================================
-Private Function ExportToSTEP(ByVal swApp As SldWorks.SldWorks, _
-                               ByVal swModel As SldWorks.ModelDoc2, _
+Private Function ExportToSTEP(ByVal swModel As SldWorks.ModelDoc2, _
                                ByVal outPath As String, _
                                ByRef errors As Long, _
                                ByRef warnings As Long) As Boolean
 
-    ExportToSTEP = False
-
-    ' 1 – Save a copy of the model as a temporary part file
-    Dim tempPath As String
-    tempPath = Environ("TEMP") & "\SW_STEP_" & Format(Now, "YYYYMMDDHHmmss") & ".sldprt"
-
-    Dim saveOk As Boolean
-    saveOk = swModel.Extension.SaveAs(tempPath, _
-                                       swSaveAsCurrentVersion, _
-                                       swSaveAsOptions_Silent Or swSaveAsOptions_Copy, _
-                                       Nothing, errors, warnings)
-    If Not saveOk Then Exit Function
-
-    ' 2 – Open the temp part silently
-    Dim tempDoc As SldWorks.ModelDoc2
-    Set tempDoc = swApp.OpenDoc6(tempPath, swDocPART, swOpenDocOptions_Silent, "", errors, warnings)
-    If tempDoc Is Nothing Then
-        On Error Resume Next
-        Kill tempPath
-        On Error GoTo 0
-        Exit Function
-    End If
-
-    ' 3 – Export the temp part to STEP
-    ExportToSTEP = tempDoc.Extension.SaveAs(outPath, _
+    ExportToSTEP = swModel.Extension.SaveAs(outPath, _
                                              swSaveAsCurrentVersion, _
                                              swSaveAsOptions_Silent, _
                                              Nothing, errors, warnings)
-
-    ' 4 – Close and delete the temp part
-    swApp.CloseDoc tempPath
-    On Error Resume Next
-    Kill tempPath
-    On Error GoTo 0
 
 End Function
 
