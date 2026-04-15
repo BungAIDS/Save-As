@@ -577,24 +577,37 @@ Private Sub DraftTransmittalEmail(ByVal exportBase As String, ByVal revLetter As
     If signOff <> "" Then body = body & vbCrLf & signOff
 
     On Error GoTo EmailErr
+
+    ' Force classic Outlook (outlook.exe) – new Outlook blocks COM sends
+    Shell "outlook.exe /recycle", vbNormalFocus
+
+    ' Wait up to 10 seconds for classic Outlook to become available via COM
     Dim olApp  As Object
     Dim olMail As Object
+    Dim i      As Integer
+    For i = 1 To 10
+        DoEvents
+        On Error Resume Next
+        Set olApp = GetObject(, "Outlook.Application")
+        On Error GoTo EmailErr
+        If Not olApp Is Nothing Then Exit For
+        Dim t As Date
+        t = Now + TimeValue("0:00:01")
+        Do While Now < t : DoEvents : Loop
+    Next i
 
-    On Error Resume Next
-    Set olApp = GetObject(, "Outlook.Application")
-    On Error GoTo EmailErr
-    If olApp Is Nothing Then Set olApp = CreateObject("Outlook.Application")
+    If olApp Is Nothing Then GoTo EmailErr
 
     Set olMail = olApp.CreateItem(0)   ' 0 = olMailItem
 
-    ' Add and resolve recipient against the Exchange address book
+    ' Resolve recipient against Exchange address book
     Dim recip As Object
     Set recip = olMail.Recipients.Add("ddecker@chicagoblower.com")
     recip.Resolve
 
     olMail.Subject = exportBase
     olMail.Body    = body
-    olMail.Save      ' Saves to Drafts – open Outlook Drafts to review and send
+    olMail.Display   ' Pops up the compose window ready to review and send
 
     Set olMail = Nothing
     Set olApp  = Nothing
@@ -602,7 +615,7 @@ Private Sub DraftTransmittalEmail(ByVal exportBase As String, ByVal revLetter As
 
 EmailErr:
     MsgBox "Could not open Outlook to draft the transmittal e-mail." & vbCrLf & _
-           "Please make sure Outlook is installed and running.", _
+           "Please make sure Outlook (classic) is installed.", _
            vbExclamation, "Save-As Export – E-mail Error"
     Set olMail = Nothing
     Set olApp  = Nothing
