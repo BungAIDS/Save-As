@@ -587,11 +587,18 @@ Private Sub DraftTransmittalEmail(ByVal exportBase As String, ByVal revLetter As
 
     Set olMail = olApp.CreateItem(0)   ' 0 = olMailItem
 
-    olMail.To      = "ddecker@chicagoblower.com"
+    ' Add and resolve recipient against the Exchange address book
+    Dim recip As Object
+    Set recip = olMail.Recipients.Add("ddecker@chicagoblower.com")
+    recip.Resolve
+
     olMail.Subject = exportBase
     olMail.Body    = body
-    olMail.Save      ' Saves to Drafts on the Exchange server first
-    olMail.Display   ' Opens the saved draft – Send will go through correctly
+    olMail.Save      ' Saves to Drafts on the Exchange server
+
+    MsgBox "Transmittal email draft saved to your Drafts folder." & vbCrLf & _
+           "Please open Outlook Drafts to review and send.", _
+           vbInformation, "Save-As Export"
 
     Set olMail = Nothing
     Set olApp  = Nothing
