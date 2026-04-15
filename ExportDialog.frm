@@ -130,7 +130,7 @@ Private Sub btnOK_Click()
         End If
     Next i
 
-    If Not chkPDF.Value And Not chkDWG.Value And Not chkDXF.Value Then
+    If Not chkPDF.Value And Not chkDWG.Value And Not chkDXF.Value And Not chkSTP.Value Then
         MsgBox "Please select at least one export format.", _
                vbExclamation, "Save-As Export"
         Exit Sub
