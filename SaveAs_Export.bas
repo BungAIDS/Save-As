@@ -579,13 +579,21 @@ Private Sub DraftTransmittalEmail(ByVal exportBase As String, ByVal revLetter As
     On Error GoTo EmailErr
     Dim olApp  As Object
     Dim olMail As Object
-    Set olApp  = CreateObject("Outlook.Application")
+
+    ' Attach to already-running Outlook so Send works correctly.
+    ' CreateObject starts a hidden instance that closes when released,
+    ' swallowing the email. GetObject uses the user's existing session.
+    On Error Resume Next
+    Set olApp = GetObject(, "Outlook.Application")
+    On Error GoTo EmailErr
+    If olApp Is Nothing Then Set olApp = CreateObject("Outlook.Application")
+
     Set olMail = olApp.CreateItem(0)   ' 0 = olMailItem
 
     olMail.To      = "ddecker@chicagoblower.com"
     olMail.Subject = exportBase
     olMail.Body    = body
-    olMail.Display   ' Opens draft for review – does NOT send automatically
+    olMail.Display   ' Opens draft for review – click Send to send
 
     Set olMail = Nothing
     Set olApp  = Nothing
