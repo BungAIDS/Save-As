@@ -578,25 +578,10 @@ Private Sub DraftTransmittalEmail(ByVal exportBase As String, ByVal revLetter As
 
     On Error GoTo EmailErr
 
-    ' Force classic Outlook (outlook.exe) – new Outlook blocks COM sends
-    Shell "outlook.exe /recycle", vbNormalFocus
-
-    ' Wait up to 10 seconds for classic Outlook to become available via COM
+    ' CreateObject launches the registered COM server for Outlook (classic)
     Dim olApp  As Object
     Dim olMail As Object
-    Dim i      As Integer
-    For i = 1 To 10
-        DoEvents
-        On Error Resume Next
-        Set olApp = GetObject(, "Outlook.Application")
-        On Error GoTo EmailErr
-        If Not olApp Is Nothing Then Exit For
-        Dim t As Date
-        t = Now + TimeValue("0:00:01")
-        Do While Now < t : DoEvents : Loop
-    Next i
-
-    If olApp Is Nothing Then GoTo EmailErr
+    Set olApp = CreateObject("Outlook.Application")
 
     Set olMail = olApp.CreateItem(0)   ' 0 = olMailItem
 
