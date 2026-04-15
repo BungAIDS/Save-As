@@ -778,14 +778,22 @@ Private Function ExportToSTEP(ByVal swApp As SldWorks.SldWorks, _
         On Error GoTo 0
 
     ElseIf swModel.GetType = 2 Then  ' 2 = swDocASSEMBLY
-        ' Generic SaveAs to .sldprt fails for assemblies (returns error 1).
-        ' Use IAssemblyDoc.SaveAsPart instead – same API SolidWorks calls
-        ' internally when you do File > Save As > Part via the UI.
-        ' "1" = swSaveAsPart_ExteriorFaces: merges all geometry into one
-        ' anonymous body, stripping component and feature names.
+        ' SaveAsPart only works on the active document.  The drawing is
+        ' currently active, so temporarily switch to the assembly, call
+        ' SaveAsPart, then switch back.
+        Dim prevTitle  As String
+        Dim activateErr As Long
+        prevTitle = swApp.ActiveDoc.GetTitle
+
+        swApp.ActivateDoc2 swModel.GetTitle, False, activateErr
+
         Dim swAssy As AssemblyDoc
-        Set swAssy = swModel
+        Set swAssy = swApp.ActiveDoc   ' fresh reference as active doc
+        ' 1 = swSaveAsPart_ExteriorFaces: merges all geometry into one
+        ' anonymous body, stripping component and feature names.
         saveOk = swAssy.SaveAsPart(tempPath, 1, errors)
+
+        swApp.ActivateDoc2 prevTitle, False, activateErr  ' restore drawing
 
         If saveOk Then
             Dim tempDoc2 As SldWorks.ModelDoc2
