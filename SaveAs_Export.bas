@@ -595,10 +595,7 @@ Private Sub DraftTransmittalEmail(ByVal exportBase As String, ByVal revLetter As
     olMail.Subject = exportBase
     olMail.Body    = body
     olMail.Save      ' Saves to Drafts on the Exchange server
-
-    MsgBox "Transmittal email draft saved to your Drafts folder." & vbCrLf & _
-           "Please open Outlook Drafts to review and send.", _
-           vbInformation, "Save-As Export"
+    olMail.Display   ' Opens the saved draft for review
 
     Set olMail = Nothing
     Set olApp  = Nothing
