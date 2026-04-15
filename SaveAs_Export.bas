@@ -778,18 +778,31 @@ Private Function ExportToSTEP(ByVal swApp As SldWorks.SldWorks, _
         On Error GoTo 0
 
     ElseIf swModel.GetType = 2 Then  ' 2 = swDocASSEMBLY
-        ' Assembly cannot be converted to .sldprt via the VBA API.
-        ' Export directly to STEP instead.  STEP does not contain feature
-        ' history, but component/part names will be visible in the file.
-        MsgBox "This drawing references an assembly.  SolidWorks does not allow " & _
-               "assembly-to-part conversion via the VBA API, so the STEP will be " & _
-               "exported directly from the assembly." & vbCrLf & vbCrLf & _
-               "Component names will be visible inside the STEP file.", _
-               vbExclamation, "Save-As Export – STEP IP Warning"
-        ExportToSTEP = swModel.Extension.SaveAs(outPath, _
-                                                 swSaveAsCurrentVersion, _
-                                                 swSaveAsOptions_Silent, _
-                                                 Nothing, errors, warnings)
+        ' Generic SaveAs to .sldprt fails for assemblies (returns error 1).
+        ' Use IAssemblyDoc.SaveAsPart instead – same API SolidWorks calls
+        ' internally when you do File > Save As > Part via the UI.
+        ' "1" = swSaveAsPart_ExteriorFaces: merges all geometry into one
+        ' anonymous body, stripping component and feature names.
+        Dim swAssy As AssemblyDoc
+        Set swAssy = swModel
+        saveOk = swAssy.SaveAsPart(tempPath, 1, errors)
+
+        If saveOk Then
+            Dim tempDoc2 As SldWorks.ModelDoc2
+            Set tempDoc2 = swApp.OpenDoc6(tempPath, swDocPART, swOpenDocOptions_Silent, "", errors, warnings)
+
+            If Not tempDoc2 Is Nothing Then
+                ExportToSTEP = tempDoc2.Extension.SaveAs(outPath, _
+                                                          swSaveAsCurrentVersion, _
+                                                          swSaveAsOptions_Silent, _
+                                                          Nothing, errors, warnings)
+                swApp.CloseDoc tempPath
+            End If
+
+            On Error Resume Next
+            Kill tempPath
+            On Error GoTo 0
+        End If
     End If
 
 End Function
