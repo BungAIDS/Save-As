@@ -585,7 +585,7 @@ Private Sub DraftTransmittalEmail(ByVal exportBase As String, ByVal revLetter As
     olMail.To      = "ddecker@chicagoblower.com"
     olMail.Subject = exportBase
     olMail.Body    = body
-    olMail.Display   ' Opens draft for review – does NOT send automatically
+    olMail.Send   ' Sends immediately
 
     Set olMail = Nothing
     Set olApp  = Nothing
