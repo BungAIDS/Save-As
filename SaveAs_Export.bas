@@ -594,8 +594,7 @@ Private Sub DraftTransmittalEmail(ByVal exportBase As String, ByVal revLetter As
 
     olMail.Subject = exportBase
     olMail.Body    = body
-    olMail.Save      ' Saves to Drafts on the Exchange server
-    olMail.Display   ' Opens the saved draft for review
+    olMail.Save      ' Saves to Drafts – open Outlook Drafts to review and send
 
     Set olMail = Nothing
     Set olApp  = Nothing
