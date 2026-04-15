@@ -729,15 +729,16 @@ End Function
 
 '==============================================================================
 ' EXPORT – STEP AP203
-' Saves the referenced model as a temporary .sldprt first, then exports that
-' part to STEP.  Saving as a part collapses the feature tree and strips
-' assembly/component/feature names so the STEP contains only exterior
-' geometry – protecting trade-secret design information.
+' Attempts to save the model as a temporary .sldprt first, then export that
+' to STEP.  The part conversion collapses the feature tree and strips names,
+' protecting trade-secret design information.
 '
-' For parts:     Extension.SaveAs to .sldprt (silent copy) works directly.
-' For assemblies: IAssemblyDoc.SaveAsPart with swSaveAsPart_ExteriorFaces
-'                 produces a single merged-geometry part with no component
-'                 or feature names visible.
+' For parts this works directly via Extension.SaveAs.
+' For assemblies the SolidWorks VBA API does not expose IAssemblyDoc.SaveAsPart
+' through its accessible COM interface, so the macro falls back to exporting
+' the assembly directly to STEP.  STEP is a geometry-only format and never
+' contains parametric feature history; the only trade-secret exposure for an
+' assembly STEP is component/part names, which the user is warned about.
 '==============================================================================
 Private Function ExportToSTEP(ByVal swApp As SldWorks.SldWorks, _
                                ByVal swModel As SldWorks.ModelDoc2, _
@@ -747,51 +748,49 @@ Private Function ExportToSTEP(ByVal swApp As SldWorks.SldWorks, _
 
     ExportToSTEP = False
 
-    ' 1 – Save a copy of the model as a temporary part file
+    ' 1 – Try saving a copy as a temporary part (collapses feature tree)
     Dim tempPath As String
     tempPath = Environ("TEMP") & "\SW_STEP_" & Format(Now, "YYYYMMDDHHmmss") & ".sldprt"
 
     Dim saveOk As Boolean
+    saveOk = swModel.Extension.SaveAs(tempPath, _
+                                       swSaveAsCurrentVersion, _
+                                       swSaveAsOptions_Silent Or swSaveAsOptions_Copy, _
+                                       Nothing, errors, warnings)
 
-    If swModel.GetType = 2 Then  ' 2 = swDocASSEMBLY
-        ' Assemblies need SaveAsPart – generic SaveAs to .sldprt is rejected
-        ' by the API and returns error 1.
-        ' swSaveAsPart_ExteriorFaces (1) merges all geometry into a single
-        ' body and removes all component/feature names.
-        Dim swAssy As Object
-        Set swAssy = swModel
-        saveOk = swAssy.SaveAsPart(tempPath, 1, errors)  ' 1 = swSaveAsPart_ExteriorFaces
-    Else
-        ' Parts: a silent copy SaveAs works directly
-        saveOk = swModel.Extension.SaveAs(tempPath, _
-                                           swSaveAsCurrentVersion, _
-                                           swSaveAsOptions_Silent Or swSaveAsOptions_Copy, _
-                                           Nothing, errors, warnings)
-    End If
+    If saveOk Then
+        ' 2 – Open the temp part silently
+        Dim tempDoc As SldWorks.ModelDoc2
+        Set tempDoc = swApp.OpenDoc6(tempPath, swDocPART, swOpenDocOptions_Silent, "", errors, warnings)
 
-    If Not saveOk Then Exit Function
+        If Not tempDoc Is Nothing Then
+            ' 3 – Export the temp part to STEP
+            ExportToSTEP = tempDoc.Extension.SaveAs(outPath, _
+                                                     swSaveAsCurrentVersion, _
+                                                     swSaveAsOptions_Silent, _
+                                                     Nothing, errors, warnings)
+            ' 4 – Close and delete the temp part
+            swApp.CloseDoc tempPath
+        End If
 
-    ' 2 – Open the temp part silently
-    Dim tempDoc As SldWorks.ModelDoc2
-    Set tempDoc = swApp.OpenDoc6(tempPath, swDocPART, swOpenDocOptions_Silent, "", errors, warnings)
-    If tempDoc Is Nothing Then
         On Error Resume Next
         Kill tempPath
         On Error GoTo 0
-        Exit Function
+
+    ElseIf swModel.GetType = 2 Then  ' 2 = swDocASSEMBLY
+        ' Assembly cannot be converted to .sldprt via the VBA API.
+        ' Export directly to STEP instead.  STEP does not contain feature
+        ' history, but component/part names will be visible in the file.
+        MsgBox "This drawing references an assembly.  SolidWorks does not allow " & _
+               "assembly-to-part conversion via the VBA API, so the STEP will be " & _
+               "exported directly from the assembly." & vbCrLf & vbCrLf & _
+               "Component names will be visible inside the STEP file.", _
+               vbExclamation, "Save-As Export – STEP IP Warning"
+        ExportToSTEP = swModel.Extension.SaveAs(outPath, _
+                                                 swSaveAsCurrentVersion, _
+                                                 swSaveAsOptions_Silent, _
+                                                 Nothing, errors, warnings)
     End If
-
-    ' 3 – Export the temp part to STEP
-    ExportToSTEP = tempDoc.Extension.SaveAs(outPath, _
-                                             swSaveAsCurrentVersion, _
-                                             swSaveAsOptions_Silent, _
-                                             Nothing, errors, warnings)
-
-    ' 4 – Close and delete the temp part
-    swApp.CloseDoc tempPath
-    On Error Resume Next
-    Kill tempPath
-    On Error GoTo 0
 
 End Function
 
