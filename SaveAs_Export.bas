@@ -760,7 +760,7 @@ Private Function ExportToSTEP(ByVal swApp As SldWorks.SldWorks, _
         ' body and removes all component/feature names.
         Dim swAssy As SldWorks.AssemblyDoc
         Set swAssy = swModel
-        saveOk = swAssy.SaveAsPart(tempPath, swSaveAsPart_ExteriorFaces, errors)
+        saveOk = swAssy.SaveAsPart(tempPath, 1, errors)  ' 1 = swSaveAsPart_ExteriorFaces
     Else
         ' Parts: a silent copy SaveAs works directly
         saveOk = swModel.Extension.SaveAs(tempPath, _
