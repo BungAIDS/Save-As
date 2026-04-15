@@ -576,35 +576,27 @@ Private Sub DraftTransmittalEmail(ByVal exportBase As String, ByVal revLetter As
            "Thanks,"
     If signOff <> "" Then body = body & vbCrLf & signOff
 
+    ' Use mailto: so Outlook treats the compose window as user-initiated.
+    ' COM-created emails are blocked by corporate security policy on Send.
+    Dim mailtoBody As String
+    mailtoBody = "Hi Debbie," & "%0A%0A" & _
+                 "This " & orderOrRev & " is ready for transmittal and close." & "%0A%0A" & _
+                 "Thanks,"
+    If signOff <> "" Then mailtoBody = mailtoBody & "%0A" & signOff
+
+    Dim mailto As String
+    mailto = "mailto:ddecker@chicagoblower.com" & _
+             "?subject=" & exportBase & _
+             "&body=" & mailtoBody
+
     On Error GoTo EmailErr
-    Dim olApp  As Object
-    Dim olMail As Object
-
-    ' Attach to already-running Outlook so Send works correctly.
-    ' CreateObject starts a hidden instance that closes when released,
-    ' swallowing the email. GetObject uses the user's existing session.
-    On Error Resume Next
-    Set olApp = GetObject(, "Outlook.Application")
-    On Error GoTo EmailErr
-    If olApp Is Nothing Then Set olApp = CreateObject("Outlook.Application")
-
-    Set olMail = olApp.CreateItem(0)   ' 0 = olMailItem
-
-    olMail.To      = "ddecker@chicagoblower.com"
-    olMail.Subject = exportBase
-    olMail.Body    = body
-    olMail.Display   ' Opens draft for review – click Send to send
-
-    Set olMail = Nothing
-    Set olApp  = Nothing
+    Shell "cmd /c start """" """ & mailto & """", vbHide
     Exit Sub
 
 EmailErr:
-    MsgBox "Could not open Outlook to draft the transmittal e-mail." & vbCrLf & _
-           "Please make sure Outlook is installed and running.", _
+    MsgBox "Could not open the e-mail draft." & vbCrLf & _
+           "Please make sure Outlook is installed and set as your default mail client.", _
            vbExclamation, "Save-As Export – E-mail Error"
-    Set olMail = Nothing
-    Set olApp  = Nothing
 End Sub
 
 '--- Maps Windows username to first-name sign-off ---
