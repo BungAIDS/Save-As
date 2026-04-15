@@ -753,7 +753,7 @@ Private Function ExportToSTEP(ByVal swApp As SldWorks.SldWorks, _
 
     Dim saveOk As Boolean
 
-    If swModel.GetType = swDocASSEMBLY Then
+    If swModel.GetType = 2 Then  ' 2 = swDocASSEMBLY
         ' Assemblies need SaveAsPart – generic SaveAs to .sldprt is rejected
         ' by the API and returns error 1.
         ' swSaveAsPart_ExteriorFaces (1) merges all geometry into a single
