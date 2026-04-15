@@ -81,7 +81,15 @@ Sub main()
 
     drawingFolder   = Left(drawingPath, InStrRev(drawingPath, "\"))
     drawingBaseName = Mid(drawingPath, Len(drawingFolder) + 1)
-    drawingBaseName = Left(drawingBaseName, InStrRev(drawingBaseName, ".") - 1)
+    Dim extPos As Integer
+    extPos = InStrRev(drawingBaseName, ".")
+    If extPos > 0 Then drawingBaseName = Left(drawingBaseName, extPos - 1)
+
+    If drawingBaseName = "" Then
+        MsgBox "Could not determine drawing name from path:" & vbCrLf & drawingPath, _
+               vbExclamation, "Save-As Export"
+        Exit Sub
+    End If
 
     '--- Extract job number (XXXXXX = everything before the first "-") ---
     Dim jobNumber As String
@@ -625,6 +633,12 @@ End Sub
 ' Subject = job number; body uses "order" or "revision" based on revLetter.
 '==============================================================================
 Private Sub DraftTransmittalEmail(ByVal exportBase As String, ByVal revLetter As String)
+    If Trim(exportBase) = "" Then
+        MsgBox "Cannot draft transmittal email: drawing name is empty.", _
+               vbExclamation, "Save-As Export"
+        Exit Sub
+    End If
+
     Dim orderOrRev As String
     orderOrRev = IIf(revLetter = "", "order", "revision")
 
