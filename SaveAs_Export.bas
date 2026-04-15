@@ -487,7 +487,13 @@ Private Sub LogExport(ByVal jobNumber As String, _
         xlWS.Cells(1, 1).Value = "Total Runs"
         xlWS.Cells(1, 2).Value = 0
         xlWS.Cells(1, 3).Value = "Time Saved"
-        xlWS.Cells(1, 4).Value = "0 minutes"
+        ' Formula auto-calculates time saved from B1 (total runs = total minutes)
+        Dim tsf As String
+        tsf = "=IF(B1=0,""0 minutes""," & _
+              "IF(INT(B1/480)>0,INT(B1/480)&IF(INT(B1/480)=1,"" working day (8 hours each)"","" working days (8 hours each)"")&IF(INT(MOD(B1,480)/60)+MOD(B1,60)>0,"", "",""),"""")&" & _
+              "IF(INT(MOD(B1,480)/60)>0,INT(MOD(B1,480)/60)&IF(INT(MOD(B1,480)/60)=1,"" hour"","" hours"")&IF(MOD(B1,60)>0,"", "",""),"""")&" & _
+              "IF(MOD(B1,60)>0,MOD(B1,60)&IF(MOD(B1,60)=1,"" minute"","" minutes""),""""))"
+        xlWS.Cells(1, 4).Formula = tsf
         xlWS.Rows(1).Font.Bold = True
 
         xlWS.Cells(HEADER_ROW, 1).Value = "Date"
@@ -514,11 +520,10 @@ Private Sub LogExport(ByVal jobNumber As String, _
     xlWS.Cells(lastRow, 8).Value = IIf(didDWG, "YES", "NO")
     xlWS.Cells(lastRow, 9).Value = IIf(didDXF, "YES", "NO")
 
-    ' Update summary
+    ' Update total runs – D1 formula recalculates automatically
     Dim totalRuns As Long
     totalRuns = lastRow - DATA_START + 1
     xlWS.Cells(1, 2).Value = totalRuns
-    xlWS.Cells(1, 4).Value = BuildTimeSaved(totalRuns)
     xlWS.Columns("A:I").AutoFit
 
     If fso.FileExists(LOG_XLSX) Then
@@ -617,33 +622,6 @@ Private Function GetSignOffName() As String
         Case "jbolda":    GetSignOffName = "Justin"
         Case Else:        GetSignOffName = ""
     End Select
-End Function
-
-'--- Builds the Time Saved display string from a run count ---
-Private Function BuildTimeSaved(ByVal totalRuns As Long) As String
-    Dim tDays  As Long : tDays  = Int(totalRuns / 480)
-    Dim tHours As Long : tHours = Int((totalRuns Mod 480) / 60)
-    Dim tMins  As Long : tMins  = totalRuns Mod 60
-
-    Dim s As String
-    s = ""
-    If tDays  > 0 Then s = s & tDays  & IIf(tDays = 1,  " working day (8 hours each), ",  " working days (8 hours each), ")
-    If tHours > 0 Then s = s & tHours & IIf(tHours = 1, " hour, ",  " hours, ")
-    If tMins  > 0 Then s = s & tMins  & IIf(tMins = 1,  " minute",  " minutes")
-    s = TrimRight(s, ", ")
-    If s = "" Then s = "0 minutes"
-    BuildTimeSaved = s
-End Function
-
-'==============================================================================
-' TRIM RIGHT - removes a trailing substring from a string if present
-'==============================================================================
-Private Function TrimRight(ByVal s As String, ByVal suffix As String) As String
-    If Right(s, Len(suffix)) = suffix Then
-        TrimRight = Left(s, Len(s) - Len(suffix))
-    Else
-        TrimRight = s
-    End If
 End Function
 
 '==============================================================================
