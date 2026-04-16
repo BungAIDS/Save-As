@@ -209,16 +209,26 @@ Sub main()
     End If
 
     If doDWG Then
-        outPath = acJobFolder & exportBase & ".dwg"
-        If ClearToWrite(outPath) Then
-            ok = ExportToDWG(swDraw, outPath, errors, warnings)
-            If ok Then
-                results = results & "  DWG: " & outPath & vbCrLf
-            Else
-                MsgBox "DWG export failed.  Errors: " & errors & "  Warnings: " & warnings, _
-                       vbExclamation, "Save-As Export"
+        Dim dwgSheets As Variant
+        dwgSheets = swDraw.GetSheetNames
+        Dim origSheet As String
+        origSheet = swDraw.GetCurrentSheet().GetName
+        Dim si As Integer
+        For si = 0 To UBound(dwgSheets)
+            Dim sheetNum As String
+            sheetNum = Format(si + 1, "00")
+            outPath = acJobFolder & exportBase & "-" & sheetNum & ".dwg"
+            If ClearToWrite(outPath) Then
+                ok = ExportToDWG(swDraw, CStr(dwgSheets(si)), outPath, errors, warnings)
+                If ok Then
+                    results = results & "  DWG: " & outPath & vbCrLf
+                Else
+                    MsgBox "DWG export failed (sheet: " & dwgSheets(si) & ").  Errors: " & errors & "  Warnings: " & warnings, _
+                           vbExclamation, "Save-As Export"
+                End If
             End If
-        End If
+        Next si
+        swDraw.ActivateSheet origSheet   ' restore original active sheet
     End If
 
     If doDXF Then
@@ -391,36 +401,60 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
     Dim destPath As String
     Dim ts       As String
 
-    ' --- PDF and DWG in the main job folder ---
-    Dim exts(1) As String
-    exts(0) = "pdf"
-    exts(1) = "dwg"
-
-    Dim i As Integer
-    For i = 0 To 1
-        fileName = Dir(folder & baseNoRev & "*." & exts(i))
-        Do While fileName <> ""
-            If LCase(fso.GetBaseName(fileName)) <> LCase(currentBase) Then
-                If Not fso.FolderExists(histFolder) Then fso.CreateFolder histFolder
-                srcPath  = folder & fileName
-                destPath = histFolder & fileName
-                If fso.FileExists(destPath) Then
-                    ts       = Format(Now, "YYYYMMDD_HHmmss")
-                    destPath = histFolder & fso.GetBaseName(fileName) & "_" & ts & "." & exts(i)
-                End If
-                On Error Resume Next
-                fso.MoveFile srcPath, destPath
-                If Err.Number <> 0 Then
-                    MsgBox fileName & " could not be moved to History - it may be read-only or open in another program." & vbCrLf & _
-                           "Please close or unlock the file and move it manually.", _
-                           vbExclamation, "Save-As Export – Archive Warning"
-                    Err.Clear
-                End If
-                On Error GoTo 0
+    ' --- PDF in the main job folder (exact name match = keep) ---
+    fileName = Dir(folder & baseNoRev & "*.pdf")
+    Do While fileName <> ""
+        If LCase(fso.GetBaseName(fileName)) <> LCase(currentBase) Then
+            If Not fso.FolderExists(histFolder) Then fso.CreateFolder histFolder
+            srcPath  = folder & fileName
+            destPath = histFolder & fileName
+            If fso.FileExists(destPath) Then
+                ts       = Format(Now, "YYYYMMDD_HHmmss")
+                destPath = histFolder & fso.GetBaseName(fileName) & "_" & ts & ".pdf"
             End If
-            fileName = Dir()
-        Loop
-    Next i
+            On Error Resume Next
+            fso.MoveFile srcPath, destPath
+            If Err.Number <> 0 Then
+                MsgBox fileName & " could not be moved to History - it may be read-only or open in another program." & vbCrLf & _
+                       "Please close or unlock the file and move it manually.", _
+                       vbExclamation, "Save-As Export – Archive Warning"
+                Err.Clear
+            End If
+            On Error GoTo 0
+        End If
+        fileName = Dir()
+    Loop
+
+    ' --- DWG in the main job folder
+    '     Keep: exact match (420788-01A.dwg) OR per-sheet match (420788-01A-01.dwg)
+    '     Archive: anything else (different revision)
+    fileName = Dir(folder & baseNoRev & "*.dwg")
+    Do While fileName <> ""
+        Dim dwgBase As String : dwgBase = LCase(fso.GetBaseName(fileName))
+        Dim curBase As String : curBase = LCase(currentBase)
+        Dim isCurrentDWG As Boolean
+        isCurrentDWG = (dwgBase = curBase) Or _
+                       (Left(dwgBase, Len(curBase) + 1) = curBase & "-")
+        If Not isCurrentDWG Then
+            If Not fso.FolderExists(histFolder) Then fso.CreateFolder histFolder
+            srcPath  = folder & fileName
+            destPath = histFolder & fileName
+            If fso.FileExists(destPath) Then
+                ts       = Format(Now, "YYYYMMDD_HHmmss")
+                destPath = histFolder & fso.GetBaseName(fileName) & "_" & ts & ".dwg"
+            End If
+            On Error Resume Next
+            fso.MoveFile srcPath, destPath
+            If Err.Number <> 0 Then
+                MsgBox fileName & " could not be moved to History - it may be read-only or open in another program." & vbCrLf & _
+                       "Please close or unlock the file and move it manually.", _
+                       vbExclamation, "Save-As Export – Archive Warning"
+                Err.Clear
+            End If
+            On Error GoTo 0
+        End If
+        fileName = Dir()
+    Loop
 
     ' --- STEP in whichever STEP sub-folder exists ("3D STEP" takes priority) ---
     Dim stepFolder2    As String
@@ -1021,9 +1055,11 @@ End Function
 ' EXPORT – DWG
 '==============================================================================
 Private Function ExportToDWG(ByVal swDraw As SldWorks.DrawingDoc, _
+                             ByVal sheetName As String, _
                              ByVal outPath As String, _
                              ByRef errors As Long, _
                              ByRef warnings As Long) As Boolean
+    swDraw.ActivateSheet sheetName
     Dim swModel As SldWorks.ModelDoc2
     Set swModel = swDraw
     ExportToDWG = swModel.Extension.SaveAs(outPath, _
