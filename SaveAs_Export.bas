@@ -397,9 +397,9 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
     Dim histFolder    As String
     Dim dxfFolder     As String
     Dim dxfHistFolder As String
-    histFolder    = folder & "HISTORY\"
+    histFolder    = GetHistFolder(folder)
     dxfFolder     = folder & "DXF\"
-    dxfHistFolder = dxfFolder & "HISTORY\"
+    dxfHistFolder = GetHistFolder(dxfFolder)
 
     Dim fileName As String
     Dim srcPath  As String
@@ -478,7 +478,7 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
     Else
         stepFolder2 = folder & "3D STEP FILE\"
     End If
-    stepHistFolder = stepFolder2 & "HISTORY\"
+    stepHistFolder = GetHistFolder(stepFolder2)
 
     If fso.FolderExists(stepFolder2) Then
         fileName = Dir(stepFolder2 & baseNoRev & "*.step")
@@ -788,6 +788,24 @@ Private Function EnsureSTEPFolder(ByVal jobFolder As String) As String
 
     Set fso = Nothing
     EnsureSTEPFolder = stepPath
+End Function
+
+'==============================================================================
+' GET HISTORY FOLDER PATH
+' Returns the "HIST" sub-folder path if it already exists; otherwise returns
+' the "HISTORY" sub-folder path.  Does NOT create the folder.
+'==============================================================================
+Private Function GetHistFolder(ByVal parentFolder As String) As String
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    If fso.FolderExists(parentFolder & "HIST\") Then
+        GetHistFolder = parentFolder & "HIST\"
+    Else
+        GetHistFolder = parentFolder & "HISTORY\"
+    End If
+
+    Set fso = Nothing
 End Function
 
 '==============================================================================
