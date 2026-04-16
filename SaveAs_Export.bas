@@ -209,26 +209,16 @@ Sub main()
     End If
 
     If doDWG Then
-        Dim dwgSheets As Variant
-        dwgSheets = swDraw.GetSheetNames
-        Dim origSheet As String
-        origSheet = swDraw.GetCurrentSheet().GetName
-        Dim si As Integer
-        For si = 0 To UBound(dwgSheets)
-            Dim sheetNum As String
-            sheetNum = Format(si + 1, "00")
-            outPath = acJobFolder & drawingBaseName & "-" & sheetNum & revLetter & ".dwg"
-            If ClearToWrite(outPath) Then
-                ok = ExportToDWG(swApp, swDraw, CStr(dwgSheets(si)), outPath, errors, warnings)
-                If ok Then
-                    results = results & "  DWG: " & outPath & vbCrLf
-                Else
-                    MsgBox "DWG export failed (sheet: " & dwgSheets(si) & ").  Errors: " & errors & "  Warnings: " & warnings, _
-                           vbExclamation, "Save-As Export"
-                End If
+        outPath = acJobFolder & exportBase & ".dwg"
+        If ClearToWrite(outPath) Then
+            ok = ExportToDWG(swDraw, outPath, errors, warnings)
+            If ok Then
+                results = results & "  DWG: " & outPath & vbCrLf
+            Else
+                MsgBox "DWG export failed.  Errors: " & errors & "  Warnings: " & warnings, _
+                       vbExclamation, "Save-As Export"
             End If
-        Next si
-        swDraw.ActivateSheet origSheet   ' restore original active sheet
+        End If
     End If
 
     If doDXF Then
@@ -426,33 +416,10 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
         fileName = Dir()
     Loop
 
-    ' --- DWG in the main job folder
-    '     New format: 420788-01-01A  (baseNoRev + "-" + sheet# + revLetter)
-    '     Old format: 420788-01A     (exact match with currentBase, kept for safety)
-    '     Archive: anything that doesn't match either pattern
+    ' --- DWG in the main job folder (exact name match = keep) ---
     fileName = Dir(folder & baseNoRev & "*.dwg")
     Do While fileName <> ""
-        Dim dwgBase As String : dwgBase = LCase(fso.GetBaseName(fileName))
-        Dim curBase As String : curBase = LCase(currentBase)
-        Dim rev     As String : rev     = LCase(revLetter)
-        Dim isCurrentDWG As Boolean
-        ' Old single-file format: exact match (420788-01A)
-        isCurrentDWG = (dwgBase = curBase)
-        ' New per-sheet format: starts with baseNoRev+"-" and ends with revLetter
-        ' e.g. 420788-01-01A, 420788-01-02A
-        If Not isCurrentDWG Then
-            If Left(dwgBase, Len(baseNoRev) + 1) = LCase(baseNoRev) & "-" Then
-                If rev = "" Then
-                    ' No revision: middle part (after last "-") should be numeric
-                    Dim midPart As String
-                    midPart = Mid(dwgBase, Len(baseNoRev) + 2)
-                    isCurrentDWG = IsNumeric(midPart)
-                Else
-                    isCurrentDWG = (Right(dwgBase, Len(rev)) = rev)
-                End If
-            End If
-        End If
-        If Not isCurrentDWG Then
+        If LCase(fso.GetBaseName(fileName)) <> LCase(currentBase) Then
             If Not fso.FolderExists(histFolder) Then fso.CreateFolder histFolder
             srcPath  = folder & fileName
             destPath = histFolder & fileName
@@ -1083,29 +1050,16 @@ End Function
 '==============================================================================
 ' EXPORT – DWG
 '==============================================================================
-Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
-                             ByVal swDraw As SldWorks.DrawingDoc, _
-                             ByVal sheetName As String, _
+Private Function ExportToDWG(ByVal swDraw As SldWorks.DrawingDoc, _
                              ByVal outPath As String, _
                              ByRef errors As Long, _
                              ByRef warnings As Long) As Boolean
-    swDraw.ActivateSheet sheetName
-
-    ' Use ExportDwgData to restrict export to this sheet only.
-    ' Without this, SolidWorks exports all sheets: sheet 1 to model space,
-    ' remaining sheets as paper-space layout tabs.
-    Dim exportData As Object
-    Set exportData = swApp.GetExportFileData(4)  ' 4 = swExportDwgData
-    Dim sheetArr(0) As String
-    sheetArr(0) = sheetName
-    exportData.SetSheets 2, sheetArr  ' 2 = swExportData_ExportSpecifiedSheets
-
     Dim swModel As SldWorks.ModelDoc2
     Set swModel = swDraw
     ExportToDWG = swModel.Extension.SaveAs(outPath, _
                                            swSaveAsCurrentVersion, _
                                            swSaveAsOptions_Silent, _
-                                           exportData, errors, warnings)
+                                           Nothing, errors, warnings)
 End Function
 
 '==============================================================================
