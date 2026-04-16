@@ -710,25 +710,37 @@ End Function
 '==============================================================================
 ' GET REFERENCED MODEL FROM DRAWING
 ' Returns the root model (assembly or part) for the drawing.
-' Strategy: match each view's ReferencedDocument filename against the
-' drawing's own filename – "421125-01.SLDDRW" should be driven by
-' "421125-01.SLDASM/.SLDPRT".  This avoids accidentally picking up a
-' sub-assembly or component that appears in a detail/section view.
-' Falls back to the first non-null ReferencedDocument if no name match.
+'
+' Resolution order:
+'   1. Exact filename match: "421125-01.SLDDRW" → "421125-01.SLDASM"
+'   2. Job-number prefix match: drawing lives in folder "421125", so accept
+'      any ReferencedDocument whose base name starts with "421125-"
+'      (handles HDX-style "421125-LAYOUT.SLDASM" driven by "421125-01.SLDDRW")
+'   3. Fallback: first non-null ReferencedDocument found
 '==============================================================================
 Private Function GetDrawingModel(ByVal swDraw As SldWorks.DrawingDoc) As SldWorks.ModelDoc2
 
-    ' Derive the drawing base name (e.g. "421125-01" from "421125-01.SLDDRW")
     Dim drawPath As String
     drawPath = swDraw.GetPathName
+
+    ' Drawing base name without extension  (e.g. "421125-01")
     Dim drawBase As String
     drawBase = Mid(drawPath, InStrRev(drawPath, "\") + 1)
     Dim dp As Integer : dp = InStrRev(drawBase, ".")
-    If dp > 0 Then drawBase = Left(drawBase, dp - 1)  ' strip extension
+    If dp > 0 Then drawBase = Left(drawBase, dp - 1)
 
-    Dim view      As SldWorks.View
-    Dim refDoc    As SldWorks.ModelDoc2
-    Dim fallback  As SldWorks.ModelDoc2
+    ' Job-number prefix from the parent folder name  (e.g. folder "421125")
+    ' Strip trailing backslash if present, then take the last path component
+    Dim folderPath As String
+    folderPath = Left(drawPath, InStrRev(drawPath, "\") - 1)
+    Dim jobPrefix As String
+    jobPrefix = Mid(folderPath, InStrRev(folderPath, "\") + 1) & "-"
+    ' jobPrefix is now e.g. "421125-"
+
+    Dim view        As SldWorks.View
+    Dim refDoc      As SldWorks.ModelDoc2
+    Dim fallback    As SldWorks.ModelDoc2
+    Dim jobMatch    As SldWorks.ModelDoc2
 
     Set view = swDraw.GetFirstView()          ' first view = sheet, skip it
     If Not view Is Nothing Then Set view = view.GetNextView()
@@ -736,24 +748,37 @@ Private Function GetDrawingModel(ByVal swDraw As SldWorks.DrawingDoc) As SldWork
     Do While Not view Is Nothing
         Set refDoc = view.ReferencedDocument
         If Not refDoc Is Nothing Then
-            ' Check if this model's filename matches the drawing filename
             Dim refPath As String : refPath = refDoc.GetPathName
             Dim refBase As String
             refBase = Mid(refPath, InStrRev(refPath, "\") + 1)
             Dim rp As Integer : rp = InStrRev(refBase, ".")
             If rp > 0 Then refBase = Left(refBase, rp - 1)
 
+            ' Pass 1: exact filename match
             If LCase(refBase) = LCase(drawBase) Then
-                Set GetDrawingModel = refDoc   ' exact name match = root model
+                Set GetDrawingModel = refDoc
                 Exit Function
             End If
 
-            If fallback Is Nothing Then Set fallback = refDoc  ' keep first as fallback
+            ' Pass 2 candidate: name starts with job-folder prefix
+            If jobMatch Is Nothing Then
+                If LCase(Left(refBase, Len(jobPrefix))) = LCase(jobPrefix) Then
+                    Set jobMatch = refDoc
+                End If
+            End If
+
+            ' Pass 3 candidate: first non-null doc seen
+            If fallback Is Nothing Then Set fallback = refDoc
         End If
         Set view = view.GetNextView()
     Loop
 
-    Set GetDrawingModel = fallback  ' no name match – return first found
+    ' Return best available match
+    If Not jobMatch Is Nothing Then
+        Set GetDrawingModel = jobMatch
+    Else
+        Set GetDrawingModel = fallback
+    End If
 End Function
 
 '==============================================================================
