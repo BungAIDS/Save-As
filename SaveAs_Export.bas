@@ -186,7 +186,7 @@ Sub main()
     '--- Archive any existing revision files for this sheet ---
     '    Wildcard: drawingBaseName & "*.ext"  (e.g. "420788-01*.pdf")
     '    Skip file whose base name matches exportBase
-    ArchiveOldRevisions acJobFolder, drawingBaseName, exportBase
+    ArchiveOldRevisions acJobFolder, drawingBaseName, exportBase, revLetter
 
     Dim errors   As Long
     Dim warnings As Long
@@ -217,7 +217,7 @@ Sub main()
         For si = 0 To UBound(dwgSheets)
             Dim sheetNum As String
             sheetNum = Format(si + 1, "00")
-            outPath = acJobFolder & exportBase & "-" & sheetNum & ".dwg"
+            outPath = acJobFolder & drawingBaseName & "-" & sheetNum & revLetter & ".dwg"
             If ClearToWrite(outPath) Then
                 ok = ExportToDWG(swDraw, CStr(dwgSheets(si)), outPath, errors, warnings)
                 If ok Then
@@ -384,7 +384,8 @@ End Function
 '==============================================================================
 Private Sub ArchiveOldRevisions(ByVal folder As String, _
                                 ByVal baseNoRev As String, _
-                                ByVal currentBase As String)
+                                ByVal currentBase As String, _
+                                ByVal revLetter As String)
 
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
@@ -426,15 +427,31 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
     Loop
 
     ' --- DWG in the main job folder
-    '     Keep: exact match (420788-01A.dwg) OR per-sheet match (420788-01A-01.dwg)
-    '     Archive: anything else (different revision)
+    '     New format: 420788-01-01A  (baseNoRev + "-" + sheet# + revLetter)
+    '     Old format: 420788-01A     (exact match with currentBase, kept for safety)
+    '     Archive: anything that doesn't match either pattern
     fileName = Dir(folder & baseNoRev & "*.dwg")
     Do While fileName <> ""
         Dim dwgBase As String : dwgBase = LCase(fso.GetBaseName(fileName))
         Dim curBase As String : curBase = LCase(currentBase)
+        Dim rev     As String : rev     = LCase(revLetter)
         Dim isCurrentDWG As Boolean
-        isCurrentDWG = (dwgBase = curBase) Or _
-                       (Left(dwgBase, Len(curBase) + 1) = curBase & "-")
+        ' Old single-file format: exact match (420788-01A)
+        isCurrentDWG = (dwgBase = curBase)
+        ' New per-sheet format: starts with baseNoRev+"-" and ends with revLetter
+        ' e.g. 420788-01-01A, 420788-01-02A
+        If Not isCurrentDWG Then
+            If Left(dwgBase, Len(baseNoRev) + 1) = LCase(baseNoRev) & "-" Then
+                If rev = "" Then
+                    ' No revision: middle part (after last "-") should be numeric
+                    Dim midPart As String
+                    midPart = Mid(dwgBase, Len(baseNoRev) + 2)
+                    isCurrentDWG = IsNumeric(midPart)
+                Else
+                    isCurrentDWG = (Right(dwgBase, Len(rev)) = rev)
+                End If
+            End If
+        End If
         If Not isCurrentDWG Then
             If Not fso.FolderExists(histFolder) Then fso.CreateFolder histFolder
             srcPath  = folder & fileName
