@@ -600,6 +600,10 @@ Private Sub LogExport(ByVal jobNumber As String, _
         Set xlWS = xlWB.Sheets(1)
         lastRow = xlWS.Cells(xlWS.Rows.Count, 1).End(-4162).Row + 1
         If lastRow < DATA_START Then lastRow = DATA_START
+        ' Backfill any headers added after the file was first created
+        If xlWS.Cells(HEADER_ROW, 10).Value = "" Then xlWS.Cells(HEADER_ROW, 10).Value = "STEP"
+        If xlWS.Cells(HEADER_ROW, 11).Value = "" Then xlWS.Cells(HEADER_ROW, 11).Value = "Email"
+        xlWS.Rows(HEADER_ROW).Font.Bold = True
     Else
         Set xlWB = xlApp.Workbooks.Add
         Set xlWS = xlWB.Sheets(1)
