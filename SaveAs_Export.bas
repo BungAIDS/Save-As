@@ -274,7 +274,7 @@ Sub main()
         ' Open the AutoCAD job folder in Windows Explorer
         Shell "explorer.exe """ & acJobFolder & """", vbNormalFocus
         ' Log this run to the shared log
-        LogExport jobNumber, drawingBaseName, swJobType, doPDF, doDWG, doDXF
+        LogExport jobNumber, drawingBaseName, swJobType, doPDF, doDWG, doDXF, doSTP, doEmail
         ' Draft transmittal e-mail if requested
         If doEmail Then DraftTransmittalEmail exportBase, revLetter
     End If
@@ -547,7 +547,9 @@ Private Sub LogExport(ByVal jobNumber As String, _
                       ByVal jobType As String, _
                       ByVal didPDF As Boolean, _
                       ByVal didDWG As Boolean, _
-                      ByVal didDXF As Boolean)
+                      ByVal didDXF As Boolean, _
+                      ByVal didSTP As Boolean, _
+                      ByVal didEmail As Boolean)
 
     Const LOG_DIR      As String = "Z:\DAG\SOLIDWORKS MACRO\Save As\Log\"
     Const LOG_XLSX     As String = "Z:\DAG\SOLIDWORKS MACRO\Save As\Log\SaveAs_Log.xlsx"
@@ -624,6 +626,8 @@ Private Sub LogExport(ByVal jobNumber As String, _
         xlWS.Cells(HEADER_ROW, 7).Value = "PDF"
         xlWS.Cells(HEADER_ROW, 8).Value = "DWG"
         xlWS.Cells(HEADER_ROW, 9).Value = "DXF"
+        xlWS.Cells(HEADER_ROW, 10).Value = "STEP"
+        xlWS.Cells(HEADER_ROW, 11).Value = "Email"
         xlWS.Rows(HEADER_ROW).Font.Bold = True
         lastRow = DATA_START
     End If
@@ -638,12 +642,14 @@ Private Sub LogExport(ByVal jobNumber As String, _
     xlWS.Cells(lastRow, 7).Value = IIf(didPDF, "YES", "NO")
     xlWS.Cells(lastRow, 8).Value = IIf(didDWG, "YES", "NO")
     xlWS.Cells(lastRow, 9).Value = IIf(didDXF, "YES", "NO")
+    xlWS.Cells(lastRow, 10).Value = IIf(didSTP, "YES", "NO")
+    xlWS.Cells(lastRow, 11).Value = IIf(didEmail, "YES", "NO")
 
     ' Update total runs – D1 formula recalculates automatically
     Dim totalRuns As Long
     totalRuns = lastRow - DATA_START + 1
     xlWS.Cells(1, 2).Value = totalRuns
-    xlWS.Columns("A:I").AutoFit
+    xlWS.Columns("A:K").AutoFit
 
     If fso.FileExists(LOG_XLSX) Then
         xlWB.Save
@@ -664,7 +670,7 @@ Overflow:
 
     If Not fso.FileExists(LOG_OVERFLOW) Then
         Open LOG_OVERFLOW For Output As #fn
-        Print #fn, "Date,Time,User,Job Number,Drawing,Job Type,PDF,DWG,DXF"
+        Print #fn, "Date,Time,User,Job Number,Drawing,Job Type,PDF,DWG,DXF,STEP,Email"
         Close #fn
     End If
 
@@ -676,7 +682,9 @@ Overflow:
                jobNumber & "," & drawingName & "," & jobType & "," & _
                IIf(didPDF, "YES", "NO") & "," & _
                IIf(didDWG, "YES", "NO") & "," & _
-               IIf(didDXF, "YES", "NO")
+               IIf(didDXF, "YES", "NO") & "," & _
+               IIf(didSTP, "YES", "NO") & "," & _
+               IIf(didEmail, "YES", "NO")
     Close #fn
 
     Set fso = Nothing
