@@ -219,7 +219,7 @@ Sub main()
             sheetNum = Format(si + 1, "00")
             outPath = acJobFolder & drawingBaseName & "-" & sheetNum & revLetter & ".dwg"
             If ClearToWrite(outPath) Then
-                ok = ExportToDWG(swDraw, CStr(dwgSheets(si)), outPath, errors, warnings)
+                ok = ExportToDWG(swApp, swDraw, CStr(dwgSheets(si)), outPath, errors, warnings)
                 If ok Then
                     results = results & "  DWG: " & outPath & vbCrLf
                 Else
@@ -1083,18 +1083,29 @@ End Function
 '==============================================================================
 ' EXPORT – DWG
 '==============================================================================
-Private Function ExportToDWG(ByVal swDraw As SldWorks.DrawingDoc, _
+Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
+                             ByVal swDraw As SldWorks.DrawingDoc, _
                              ByVal sheetName As String, _
                              ByVal outPath As String, _
                              ByRef errors As Long, _
                              ByRef warnings As Long) As Boolean
     swDraw.ActivateSheet sheetName
+
+    ' Use ExportDwgData to restrict export to this sheet only.
+    ' Without this, SolidWorks exports all sheets: sheet 1 to model space,
+    ' remaining sheets as paper-space layout tabs.
+    Dim exportData As Object
+    Set exportData = swApp.GetExportFileData(swExportDwgData)
+    Dim sheetArr(0) As String
+    sheetArr(0) = sheetName
+    exportData.SetSheets swExportData_ExportSpecifiedSheets, sheetArr
+
     Dim swModel As SldWorks.ModelDoc2
     Set swModel = swDraw
     ExportToDWG = swModel.Extension.SaveAs(outPath, _
                                            swSaveAsCurrentVersion, _
                                            swSaveAsOptions_Silent, _
-                                           Nothing, errors, warnings)
+                                           exportData, errors, warnings)
 End Function
 
 '==============================================================================
