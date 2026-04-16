@@ -778,29 +778,47 @@ Private Function ExportToSTEP(ByVal swApp As SldWorks.SldWorks, _
         On Error GoTo 0
 
     ElseIf swModel.GetType = 2 Then  ' 2 = swDocASSEMBLY
-        ' IAssemblyDoc.SaveAsPart is not reachable through the VBA COM
-        ' dispatch interface (error 438) – this is a SolidWorks automation
-        ' limitation, not a bug in this macro.  For assemblies we export
-        ' directly to STEP and warn the user.
-        '
-        ' STEP format never contains parametric feature history regardless
-        ' of source type; the only IP exposure for an assembly STEP is
-        ' component / sub-part names.  If those need to be hidden, do
-        ' File > Save As > Part (Exterior Faces) manually in SolidWorks
-        ' first, then re-run this macro on a drawing of the saved part.
-        MsgBox "This drawing references an assembly." & vbCrLf & vbCrLf & _
-               "SolidWorks does not expose assembly-to-part conversion through " & _
-               "the VBA API, so the STEP will be exported directly from the " & _
-               "assembly.  Component names will be visible in the file." & vbCrLf & vbCrLf & _
-               "For full IP protection: do File > Save As > Part (Exterior Faces) " & _
-               "manually in SolidWorks first, then run this macro on a drawing " & _
-               "of the resulting part.", _
-               vbExclamation, "Save-As Export – STEP Assembly Notice"
+        ' SaveAsPart requires the assembly to be fully open and active.
+        ' When referenced from a drawing it may be in a lightweight state.
+        ' OpenDoc6 on an already-open file forces a full load and makes it
+        ' the active document without opening a second copy.
+        Dim assyPath As String
+        assyPath = swModel.GetPathName
 
-        ExportToSTEP = swModel.Extension.SaveAs(outPath, _
-                                                 swSaveAsCurrentVersion, _
-                                                 swSaveAsOptions_Silent, _
-                                                 Nothing, errors, warnings)
+        Dim prevTitle  As String
+        Dim openErrors As Long
+        prevTitle = swApp.ActiveDoc.GetTitle
+
+        Dim fullyOpen As SldWorks.ModelDoc2
+        Set fullyOpen = swApp.OpenDoc6(assyPath, 2, swOpenDocOptions_Silent, "", openErrors, 0)
+
+        If Not fullyOpen Is Nothing Then
+            Dim swAssy As AssemblyDoc
+            Set swAssy = fullyOpen
+            ' 1 = swSaveAsPart_ExteriorFaces: merges all geometry into one
+            ' anonymous body, stripping component and feature names.
+            saveOk = swAssy.SaveAsPart(tempPath, 1, errors)
+        End If
+
+        ' Restore the drawing as the active document
+        swApp.ActivateDoc2 prevTitle, False, openErrors
+
+        If saveOk Then
+            Dim tempDoc2 As SldWorks.ModelDoc2
+            Set tempDoc2 = swApp.OpenDoc6(tempPath, swDocPART, swOpenDocOptions_Silent, "", openErrors, 0)
+
+            If Not tempDoc2 Is Nothing Then
+                ExportToSTEP = tempDoc2.Extension.SaveAs(outPath, _
+                                                          swSaveAsCurrentVersion, _
+                                                          swSaveAsOptions_Silent, _
+                                                          Nothing, errors, warnings)
+                swApp.CloseDoc tempPath
+            End If
+
+            On Error Resume Next
+            Kill tempPath
+            On Error GoTo 0
+        End If
     End If
 
 End Function
