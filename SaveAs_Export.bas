@@ -1117,15 +1117,15 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
     If Not copyOk Then Exit Function
 
     Dim tempModel As SldWorks.ModelDoc2
-    Set tempModel = swApp.OpenDoc6(tempPath, swDocDRAWING, swOpenDocOptions_Silent, "", errors, warnings)
+    ' DWG export requires the document to be fully rendered — silent-open skips
+    ' view rendering and SaveAs silently returns False.  Open visibly instead
+    ' (brief flash) so SolidWorks renders the drawing views before we export.
+    Dim actErr As Long
+    Set tempModel = swApp.OpenDoc6(tempPath, swDocDRAWING, 0, "", errors, warnings)
     If tempModel Is Nothing Then
         On Error Resume Next : Kill tempPath : On Error GoTo 0
         Exit Function
     End If
-
-    ' Activate the temp doc — SaveAs to non-native format requires it to be active.
-    ' Use the return value so tempModel is guaranteed to be the correct reference.
-    Dim actErr As Long
     Set tempModel = swApp.ActivateDoc2(tempPath, False, actErr)
     If tempModel Is Nothing Then
         swApp.CloseDoc tempPath
