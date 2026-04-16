@@ -709,22 +709,51 @@ End Function
 
 '==============================================================================
 ' GET REFERENCED MODEL FROM DRAWING
-' Returns the first referenced assembly or part found in the drawing views.
+' Returns the root model (assembly or part) for the drawing.
+' Strategy: match each view's ReferencedDocument filename against the
+' drawing's own filename – "421125-01.SLDDRW" should be driven by
+' "421125-01.SLDASM/.SLDPRT".  This avoids accidentally picking up a
+' sub-assembly or component that appears in a detail/section view.
+' Falls back to the first non-null ReferencedDocument if no name match.
 '==============================================================================
 Private Function GetDrawingModel(ByVal swDraw As SldWorks.DrawingDoc) As SldWorks.ModelDoc2
-    Dim view    As SldWorks.View
-    Dim refDoc  As SldWorks.ModelDoc2
-    Set view = swDraw.GetFirstView()        ' First view is the sheet itself
-    If Not view Is Nothing Then Set view = view.GetNextView()  ' Skip to first real view
+
+    ' Derive the drawing base name (e.g. "421125-01" from "421125-01.SLDDRW")
+    Dim drawPath As String
+    drawPath = swDraw.GetPathName
+    Dim drawBase As String
+    drawBase = Mid(drawPath, InStrRev(drawPath, "\") + 1)
+    Dim dp As Integer : dp = InStrRev(drawBase, ".")
+    If dp > 0 Then drawBase = Left(drawBase, dp - 1)  ' strip extension
+
+    Dim view      As SldWorks.View
+    Dim refDoc    As SldWorks.ModelDoc2
+    Dim fallback  As SldWorks.ModelDoc2
+
+    Set view = swDraw.GetFirstView()          ' first view = sheet, skip it
+    If Not view Is Nothing Then Set view = view.GetNextView()
+
     Do While Not view Is Nothing
         Set refDoc = view.ReferencedDocument
         If Not refDoc Is Nothing Then
-            Set GetDrawingModel = refDoc
-            Exit Function
+            ' Check if this model's filename matches the drawing filename
+            Dim refPath As String : refPath = refDoc.GetPathName
+            Dim refBase As String
+            refBase = Mid(refPath, InStrRev(refPath, "\") + 1)
+            Dim rp As Integer : rp = InStrRev(refBase, ".")
+            If rp > 0 Then refBase = Left(refBase, rp - 1)
+
+            If LCase(refBase) = LCase(drawBase) Then
+                Set GetDrawingModel = refDoc   ' exact name match = root model
+                Exit Function
+            End If
+
+            If fallback Is Nothing Then Set fallback = refDoc  ' keep first as fallback
         End If
         Set view = view.GetNextView()
     Loop
-    Set GetDrawingModel = Nothing
+
+    Set GetDrawingModel = fallback  ' no name match – return first found
 End Function
 
 '==============================================================================
