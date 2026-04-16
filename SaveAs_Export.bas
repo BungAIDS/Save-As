@@ -1096,13 +1096,21 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
         Exit Function
     End If
 
-    ' Multi-sheet: save a silent temp copy, delete every sheet except the target,
-    ' then export.  A single-sheet DWG always goes to model space at correct scale.
-    Dim tempPath As String
-    tempPath = Environ("TEMP") & "\SW_DWG_" & Format(Now, "YYYYMMDDHHmmss") & ".slddrw"
-
+    ' Multi-sheet: save a silent temp copy in the SAME folder as the original
+    ' drawing so that relative model references (to assemblies/parts) stay intact.
+    ' Saving to %TEMP% breaks those references and SolidWorks silently fails to
+    ' export.  Delete every sheet except the target, then SaveAs to DWG — a
+    ' single-sheet drawing always exports to model space at the correct scale.
     Dim drawModel As SldWorks.ModelDoc2
     Set drawModel = swDraw
+
+    Dim srcPath As String : srcPath = drawModel.GetPathName
+    Dim srcFolder As String
+    srcFolder = Left(srcPath, InStrRev(srcPath, "\"))
+
+    Dim tempPath As String
+    tempPath = srcFolder & "SW_DWG_TEMP_" & Format(Now, "YYYYMMDDHHmmss") & ".slddrw"
+
     Dim copyOk As Boolean
     copyOk = drawModel.Extension.SaveAs(tempPath, swSaveAsCurrentVersion, _
                  swSaveAsOptions_Silent Or swSaveAsOptions_Copy, Nothing, errors, warnings)
@@ -1115,10 +1123,15 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
         Exit Function
     End If
 
-    ' SaveAs to a non-native format (DWG) requires the document to be active;
-    ' silent-open does not activate it, so we must do so explicitly.
+    ' Activate the temp doc — SaveAs to non-native format requires it to be active.
+    ' Use the return value so tempModel is guaranteed to be the correct reference.
     Dim actErr As Long
-    swApp.ActivateDoc2 tempPath, False, actErr
+    Set tempModel = swApp.ActivateDoc2(tempPath, False, actErr)
+    If tempModel Is Nothing Then
+        swApp.CloseDoc tempPath
+        On Error Resume Next : Kill tempPath : On Error GoTo 0
+        Exit Function
+    End If
 
     Dim tempDraw As SldWorks.DrawingDoc
     Set tempDraw = tempModel
@@ -1132,6 +1145,8 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
             tempDraw.DeleteSheet CStr(allSheets(si))
         End If
     Next si
+
+    tempModel.ForceRebuild3 False
 
     ExportToDWG = tempModel.Extension.SaveAs(outPath, swSaveAsCurrentVersion, _
                       swSaveAsOptions_Silent, Nothing, errors, warnings)
