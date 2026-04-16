@@ -783,7 +783,9 @@ End Function
 
 '==============================================================================
 ' EXPORT – STEP AP203
-' Exports the model directly to STEP using Extension.SaveAs.
+' Saves the model as a part first (All Components mode) to collapse the
+' feature tree and strip component names for IP protection, then exports
+' that temp part to STEP.  Works for both parts and assemblies.
 '==============================================================================
 Private Function ExportToSTEP(ByVal swApp As SldWorks.SldWorks, _
                                ByVal swModel As SldWorks.ModelDoc2, _
@@ -791,10 +793,62 @@ Private Function ExportToSTEP(ByVal swApp As SldWorks.SldWorks, _
                                ByRef errors As Long, _
                                ByRef warnings As Long) As Boolean
 
-    ExportToSTEP = swModel.Extension.SaveAs(outPath, _
-                                             swSaveAsCurrentVersion, _
-                                             swSaveAsOptions_Silent, _
-                                             Nothing, errors, warnings)
+    ExportToSTEP = False
+
+    Dim tempPath As String
+    tempPath = Environ("TEMP") & "\SW_STEP_" & Format(Now, "YYYYMMDDHHmmss") & ".sldprt"
+
+    Dim saveOk As Boolean
+
+    If swModel.GetType = 1 Then  ' 1 = swDocPART
+
+        saveOk = swModel.Extension.SaveAs(tempPath, _
+                                           swSaveAsCurrentVersion, _
+                                           swSaveAsOptions_Silent Or swSaveAsOptions_Copy, _
+                                           Nothing, errors, warnings)
+
+    Else  ' 2 = swDocASSEMBLY
+
+        ' Set save-as-part mode to All Components, then call SaveAs3
+        Dim origPref As Long
+        origPref = swApp.GetUserPreferenceIntegerValue( _
+                       swUserPreferenceIntegerValue_e.swSaveAssemblyAsPartOptions)
+
+        swApp.SetUserPreferenceIntegerValue _
+            swUserPreferenceIntegerValue_e.swSaveAssemblyAsPartOptions, _
+            swSaveAsmAsPartOptions_e.swSaveAsmAsPart_AllComponents  ' = 2
+
+        Dim prevTitle As String
+        Dim activErr  As Long
+        prevTitle = swApp.ActiveDoc.GetTitle
+        swApp.ActivateDoc2 swModel.GetTitle, False, activErr
+
+        Dim saveResult As Long
+        saveResult = swApp.ActiveDoc.SaveAs3(tempPath, 0, 2)
+        saveOk = (saveResult = 0)
+
+        swApp.SetUserPreferenceIntegerValue _
+            swUserPreferenceIntegerValue_e.swSaveAssemblyAsPartOptions, origPref
+        swApp.ActivateDoc2 prevTitle, False, activErr
+
+    End If
+
+    If saveOk Then
+        Dim tempDoc As SldWorks.ModelDoc2
+        Set tempDoc = swApp.OpenDoc6(tempPath, swDocPART, swOpenDocOptions_Silent, "", errors, warnings)
+
+        If Not tempDoc Is Nothing Then
+            ExportToSTEP = tempDoc.Extension.SaveAs(outPath, _
+                                                     swSaveAsCurrentVersion, _
+                                                     swSaveAsOptions_Silent, _
+                                                     Nothing, errors, warnings)
+            swApp.CloseDoc tempPath
+        End If
+
+        On Error Resume Next
+        Kill tempPath
+        On Error GoTo 0
+    End If
 
 End Function
 
