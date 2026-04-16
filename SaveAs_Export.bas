@@ -1115,6 +1115,11 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
         Exit Function
     End If
 
+    ' SaveAs to a non-native format (DWG) requires the document to be active;
+    ' silent-open does not activate it, so we must do so explicitly.
+    Dim actErr As Long
+    swApp.ActivateDoc2 tempPath, False, actErr
+
     Dim tempDraw As SldWorks.DrawingDoc
     Set tempDraw = tempModel
 
