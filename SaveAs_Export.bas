@@ -716,7 +716,9 @@ End Function
 '   2. Job-number prefix match: drawing lives in folder "421125", so accept
 '      any ReferencedDocument whose base name starts with "421125-"
 '      (handles HDX-style "421125-LAYOUT.SLDASM" driven by "421125-01.SLDDRW")
-'   3. Fallback: first non-null ReferencedDocument found
+'   3. If neither match, prompt the user to pick from all unique referenced
+'      documents found in the drawing views.
+'   4. Nothing found at all → return Nothing (caller shows error).
 '==============================================================================
 Private Function GetDrawingModel(ByVal swDraw As SldWorks.DrawingDoc) As SldWorks.ModelDoc2
 
@@ -730,17 +732,20 @@ Private Function GetDrawingModel(ByVal swDraw As SldWorks.DrawingDoc) As SldWork
     If dp > 0 Then drawBase = Left(drawBase, dp - 1)
 
     ' Job-number prefix from the parent folder name  (e.g. folder "421125")
-    ' Strip trailing backslash if present, then take the last path component
     Dim folderPath As String
     folderPath = Left(drawPath, InStrRev(drawPath, "\") - 1)
     Dim jobPrefix As String
     jobPrefix = Mid(folderPath, InStrRev(folderPath, "\") + 1) & "-"
-    ' jobPrefix is now e.g. "421125-"
 
-    Dim view        As SldWorks.View
-    Dim refDoc      As SldWorks.ModelDoc2
-    Dim fallback    As SldWorks.ModelDoc2
-    Dim jobMatch    As SldWorks.ModelDoc2
+    Dim view     As SldWorks.View
+    Dim refDoc   As SldWorks.ModelDoc2
+    Dim jobMatch As SldWorks.ModelDoc2
+
+    ' Parallel arrays to accumulate unique candidates for the user-pick fallback
+    Dim candDocs(50)  As SldWorks.ModelDoc2
+    Dim candNames(50) As String
+    Dim candCount     As Integer
+    candCount = 0
 
     Set view = swDraw.GetFirstView()          ' first view = sheet, skip it
     If Not view Is Nothing Then Set view = view.GetNextView()
@@ -754,7 +759,7 @@ Private Function GetDrawingModel(ByVal swDraw As SldWorks.DrawingDoc) As SldWork
             Dim rp As Integer : rp = InStrRev(refBase, ".")
             If rp > 0 Then refBase = Left(refBase, rp - 1)
 
-            ' Pass 1: exact filename match
+            ' Pass 1: exact filename match → done immediately
             If LCase(refBase) = LCase(drawBase) Then
                 Set GetDrawingModel = refDoc
                 Exit Function
@@ -767,18 +772,80 @@ Private Function GetDrawingModel(ByVal swDraw As SldWorks.DrawingDoc) As SldWork
                 End If
             End If
 
-            ' Pass 3 candidate: first non-null doc seen
-            If fallback Is Nothing Then Set fallback = refDoc
+            ' Accumulate unique docs for user-pick fallback
+            Dim isDupe As Boolean : isDupe = False
+            Dim ci As Integer
+            For ci = 0 To candCount - 1
+                If LCase(candNames(ci)) = LCase(refBase) Then isDupe = True : Exit For
+            Next ci
+            If Not isDupe And candCount <= 50 Then
+                Set candDocs(candCount) = refDoc
+                candNames(candCount) = refBase
+                candCount = candCount + 1
+            End If
         End If
         Set view = view.GetNextView()
     Loop
 
-    ' Return best available match
+    ' Pass 2 result: job-folder prefix match
     If Not jobMatch Is Nothing Then
         Set GetDrawingModel = jobMatch
-    Else
-        Set GetDrawingModel = fallback
+        Exit Function
     End If
+
+    ' Pass 3: no automatic match – ask the user to pick
+    If candCount = 0 Then
+        Set GetDrawingModel = Nothing   ' caller will show "no model found" error
+        Exit Function
+    End If
+
+    If candCount = 1 Then
+        ' Only one option – confirm rather than silently use it
+        Dim ans As Integer
+        ans = MsgBox("Could not automatically identify the assembly for this drawing." & vbCrLf & vbCrLf & _
+                     "Use this model for STEP export?" & vbCrLf & "  " & candNames(0), _
+                     vbQuestion + vbYesNo, "Save-As Export – Select Model")
+        If ans = vbYes Then
+            Set GetDrawingModel = candDocs(0)
+        Else
+            Set GetDrawingModel = Nothing
+        End If
+        Exit Function
+    End If
+
+    ' Multiple candidates – build a numbered list for InputBox
+    Dim listMsg As String
+    listMsg = "Could not automatically identify the assembly for this drawing." & vbCrLf & _
+              "Enter the number of the model to use for STEP export:" & vbCrLf & vbCrLf
+    Dim li As Integer
+    For li = 0 To candCount - 1
+        listMsg = listMsg & "  " & (li + 1) & ":  " & candNames(li) & vbCrLf
+    Next li
+
+    Dim pick As String
+    pick = InputBox(listMsg, "Save-As Export – Select Model", "")
+
+    If pick = "" Then
+        Set GetDrawingModel = Nothing   ' user cancelled
+        Exit Function
+    End If
+
+    If Not IsNumeric(pick) Then
+        MsgBox "Invalid selection.", vbExclamation, "Save-As Export"
+        Set GetDrawingModel = Nothing
+        Exit Function
+    End If
+
+    Dim pickIdx As Integer
+    pickIdx = CInt(pick) - 1
+    If pickIdx < 0 Or pickIdx >= candCount Then
+        MsgBox "Selection out of range.", vbExclamation, "Save-As Export"
+        Set GetDrawingModel = Nothing
+        Exit Function
+    End If
+
+    Set GetDrawingModel = candDocs(pickIdx)
+
 End Function
 
 '==============================================================================
