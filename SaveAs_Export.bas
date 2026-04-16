@@ -422,10 +422,14 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
         Loop
     Next i
 
-    ' --- STEP in the 3D STEP FILE sub-folder → 3D STEP FILE\History\ ---
+    ' --- STEP in whichever STEP sub-folder exists ("3D STEP" takes priority) ---
     Dim stepFolder2    As String
     Dim stepHistFolder As String
-    stepFolder2    = folder & "3D STEP FILE\"
+    If fso.FolderExists(folder & "3D STEP\") Then
+        stepFolder2 = folder & "3D STEP\"
+    Else
+        stepFolder2 = folder & "3D STEP FILE\"
+    End If
     stepHistFolder = stepFolder2 & "HISTORY\"
 
     If fso.FolderExists(stepFolder2) Then
@@ -698,11 +702,18 @@ End Function
 ' ENSURE 3D STEP FILE FOLDER
 '==============================================================================
 Private Function EnsureSTEPFolder(ByVal jobFolder As String) As String
-    Dim stepPath As String
-    stepPath = jobFolder & "3D STEP FILE\"
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
-    If Not fso.FolderExists(stepPath) Then fso.CreateFolder stepPath
+
+    ' Prefer an existing "3D STEP" folder; fall back to "3D STEP FILE" (creating it if needed)
+    Dim stepPath As String
+    If fso.FolderExists(jobFolder & "3D STEP\") Then
+        stepPath = jobFolder & "3D STEP\"
+    Else
+        stepPath = jobFolder & "3D STEP FILE\"
+        If Not fso.FolderExists(stepPath) Then fso.CreateFolder stepPath
+    End If
+
     Set fso = Nothing
     EnsureSTEPFolder = stepPath
 End Function
