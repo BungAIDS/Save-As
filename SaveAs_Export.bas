@@ -729,16 +729,12 @@ End Function
 
 '==============================================================================
 ' EXPORT – STEP AP203
-' Attempts to save the model as a temporary .sldprt first, then export that
-' to STEP.  The part conversion collapses the feature tree and strips names,
-' protecting trade-secret design information.
-'
-' For parts this works directly via Extension.SaveAs.
-' For assemblies the SolidWorks VBA API does not expose IAssemblyDoc.SaveAsPart
-' through its accessible COM interface, so the macro falls back to exporting
-' the assembly directly to STEP.  STEP is a geometry-only format and never
-' contains parametric feature history; the only trade-secret exposure for an
-' assembly STEP is component/part names, which the user is warned about.
+' Exports the referenced model directly to STEP.
+' For parts, first saves a silent copy as a temp .sldprt (collapses the
+' feature tree so the STEP contains only geometry, no feature names).
+' For assemblies, IAssemblyDoc.SaveAsPart is not reachable through the
+' SolidWorks VBA COM interface, so the assembly is exported directly.
+' STEP never contains parametric feature history regardless of source type.
 '==============================================================================
 Private Function ExportToSTEP(ByVal swApp As SldWorks.SldWorks, _
                                ByVal swModel As SldWorks.ModelDoc2, _
@@ -748,70 +744,27 @@ Private Function ExportToSTEP(ByVal swApp As SldWorks.SldWorks, _
 
     ExportToSTEP = False
 
-    ' 1 – Try saving a copy as a temporary part (collapses feature tree)
-    Dim tempPath As String
-    tempPath = Environ("TEMP") & "\SW_STEP_" & Format(Now, "YYYYMMDDHHmmss") & ".sldprt"
+    If swModel.GetType = 1 Then  ' 1 = swDocPART
 
-    Dim saveOk As Boolean
-    saveOk = swModel.Extension.SaveAs(tempPath, _
-                                       swSaveAsCurrentVersion, _
-                                       swSaveAsOptions_Silent Or swSaveAsOptions_Copy, _
-                                       Nothing, errors, warnings)
+        ' Save a silent copy as a temp part first – this collapses the
+        ' feature tree so feature names are stripped from the STEP output.
+        Dim tempPath As String
+        tempPath = Environ("TEMP") & "\SW_STEP_" & Format(Now, "YYYYMMDDHHmmss") & ".sldprt"
 
-    If saveOk Then
-        ' 2 – Open the temp part silently
-        Dim tempDoc As SldWorks.ModelDoc2
-        Set tempDoc = swApp.OpenDoc6(tempPath, swDocPART, swOpenDocOptions_Silent, "", errors, warnings)
-
-        If Not tempDoc Is Nothing Then
-            ' 3 – Export the temp part to STEP
-            ExportToSTEP = tempDoc.Extension.SaveAs(outPath, _
-                                                     swSaveAsCurrentVersion, _
-                                                     swSaveAsOptions_Silent, _
-                                                     Nothing, errors, warnings)
-            ' 4 – Close and delete the temp part
-            swApp.CloseDoc tempPath
-        End If
-
-        On Error Resume Next
-        Kill tempPath
-        On Error GoTo 0
-
-    ElseIf swModel.GetType = 2 Then  ' 2 = swDocASSEMBLY
-        ' SaveAsPart requires the assembly to be fully open and active.
-        ' When referenced from a drawing it may be in a lightweight state.
-        ' OpenDoc6 on an already-open file forces a full load and makes it
-        ' the active document without opening a second copy.
-        Dim assyPath As String
-        assyPath = swModel.GetPathName
-
-        Dim prevTitle  As String
-        Dim openErrors As Long
-        prevTitle = swApp.ActiveDoc.GetTitle
-
-        Dim fullyOpen As SldWorks.ModelDoc2
-        Set fullyOpen = swApp.OpenDoc6(assyPath, 2, swOpenDocOptions_Silent, "", openErrors, 0)
-
-        If Not fullyOpen Is Nothing Then
-            Dim swAssy As AssemblyDoc
-            Set swAssy = fullyOpen
-            ' 1 = swSaveAsPart_ExteriorFaces: merges all geometry into one
-            ' anonymous body, stripping component and feature names.
-            saveOk = swAssy.SaveAsPart(tempPath, 1, errors)
-        End If
-
-        ' Restore the drawing as the active document
-        swApp.ActivateDoc2 prevTitle, False, openErrors
-
+        Dim saveOk As Boolean
+        saveOk = swModel.Extension.SaveAs(tempPath, _
+                                           swSaveAsCurrentVersion, _
+                                           swSaveAsOptions_Silent Or swSaveAsOptions_Copy, _
+                                           Nothing, errors, warnings)
         If saveOk Then
-            Dim tempDoc2 As SldWorks.ModelDoc2
-            Set tempDoc2 = swApp.OpenDoc6(tempPath, swDocPART, swOpenDocOptions_Silent, "", openErrors, 0)
+            Dim tempDoc As SldWorks.ModelDoc2
+            Set tempDoc = swApp.OpenDoc6(tempPath, swDocPART, swOpenDocOptions_Silent, "", errors, warnings)
 
-            If Not tempDoc2 Is Nothing Then
-                ExportToSTEP = tempDoc2.Extension.SaveAs(outPath, _
-                                                          swSaveAsCurrentVersion, _
-                                                          swSaveAsOptions_Silent, _
-                                                          Nothing, errors, warnings)
+            If Not tempDoc Is Nothing Then
+                ExportToSTEP = tempDoc.Extension.SaveAs(outPath, _
+                                                         swSaveAsCurrentVersion, _
+                                                         swSaveAsOptions_Silent, _
+                                                         Nothing, errors, warnings)
                 swApp.CloseDoc tempPath
             End If
 
@@ -819,6 +772,13 @@ Private Function ExportToSTEP(ByVal swApp As SldWorks.SldWorks, _
             Kill tempPath
             On Error GoTo 0
         End If
+
+    Else
+        ' Assembly (or other type): export directly to STEP.
+        ExportToSTEP = swModel.Extension.SaveAs(outPath, _
+                                                 swSaveAsCurrentVersion, _
+                                                 swSaveAsOptions_Silent, _
+                                                 Nothing, errors, warnings)
     End If
 
 End Function
