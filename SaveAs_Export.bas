@@ -1095,10 +1095,10 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
     ' Without this, SolidWorks exports all sheets: sheet 1 to model space,
     ' remaining sheets as paper-space layout tabs.
     Dim exportData As Object
-    Set exportData = swApp.GetExportFileData(swExportDwgData)
+    Set exportData = swApp.GetExportFileData(4)  ' 4 = swExportDwgData
     Dim sheetArr(0) As String
     sheetArr(0) = sheetName
-    exportData.SetSheets swExportData_ExportSpecifiedSheets, sheetArr
+    exportData.SetSheets 2, sheetArr  ' 2 = swExportData_ExportSpecifiedSheets
 
     Dim swModel As SldWorks.ModelDoc2
     Set swModel = swDraw
