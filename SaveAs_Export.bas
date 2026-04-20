@@ -1087,20 +1087,18 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
     Dim allSheets As Variant
     allSheets = swDraw.GetSheetNames
 
-    ' Single-sheet drawing: export directly — goes to model space
+    ' Single-sheet drawing: export the original document directly
     If UBound(allSheets) = 0 Then
         Dim swModelSingle As SldWorks.ModelDoc2
         Set swModelSingle = swDraw
-        ExportToDWG = swModelSingle.Extension.SaveAs(outPath, swSaveAsCurrentVersion, _
-                          swSaveAsOptions_Silent, Nothing, errors, warnings)
+        Dim r0 As Long
+        r0 = swModelSingle.SaveAs3(outPath, 0, swSaveAsOptions_Silent Or swSaveAsOptions_Copy)
+        ExportToDWG = (r0 = 0)
         Exit Function
     End If
 
-    ' Multi-sheet: save a silent temp copy in the SAME folder as the original
-    ' drawing so that relative model references (to assemblies/parts) stay intact.
-    ' Saving to %TEMP% breaks those references and SolidWorks silently fails to
-    ' export.  Delete every sheet except the target, then SaveAs to DWG — a
-    ' single-sheet drawing always exports to model space at the correct scale.
+    ' Multi-sheet: copy the .slddrw beside the original (preserves references),
+    ' open, delete every sheet except the target, export to model-space DWG.
     Dim drawModel As SldWorks.ModelDoc2
     Set drawModel = swDraw
 
@@ -1111,16 +1109,19 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
     Dim tempPath As String
     tempPath = srcFolder & "SW_DWG_TEMP_" & Format(Now, "YYYYMMDDHHmmss") & ".slddrw"
 
-    Dim copyOk As Boolean
-    copyOk = drawModel.Extension.SaveAs(tempPath, swSaveAsCurrentVersion, _
-                 swSaveAsOptions_Silent Or swSaveAsOptions_Copy, Nothing, errors, warnings)
-    If Not copyOk Then Exit Function
+    ' Filesystem copy is more reliable than Extension.SaveAs+Copy on network drives
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    On Error Resume Next
+    fso.CopyFile srcPath, tempPath, True
+    Dim fsoErr As Long : fsoErr = Err.Number
+    On Error GoTo 0
+    Set fso = Nothing
+    If fsoErr <> 0 Then Exit Function
 
-    Dim tempModel As SldWorks.ModelDoc2
-    ' DWG export requires the document to be fully rendered — silent-open skips
-    ' view rendering and SaveAs silently returns False.  Open visibly instead
-    ' (brief flash) so SolidWorks renders the drawing views before we export.
+    ' Open visibly — DWG export requires drawing views to be rendered first
     Dim actErr As Long
+    Dim tempModel As SldWorks.ModelDoc2
     Set tempModel = swApp.OpenDoc6(tempPath, swDocDRAWING, 0, "", errors, warnings)
     If tempModel Is Nothing Then
         On Error Resume Next : Kill tempPath : On Error GoTo 0
@@ -1148,8 +1149,10 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
 
     tempModel.ForceRebuild3 False
 
-    ExportToDWG = tempModel.Extension.SaveAs(outPath, swSaveAsCurrentVersion, _
-                      swSaveAsOptions_Silent, Nothing, errors, warnings)
+    ' SaveAs3 (lower-level than Extension.SaveAs) for format conversion
+    Dim dwgResult As Long
+    dwgResult = tempModel.SaveAs3(outPath, 0, swSaveAsOptions_Silent Or swSaveAsOptions_Copy)
+    ExportToDWG = (dwgResult = 0)
 
     swApp.CloseDoc tempPath
     On Error Resume Next : Kill tempPath : On Error GoTo 0
