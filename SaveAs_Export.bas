@@ -1144,13 +1144,21 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
     Dim tempDraw As Object
     Set tempDraw = swApp.ActiveDoc
 
+    ' Rebuild before editing so SW considers the document fully loaded
+    tempModel.ForceRebuild3 False
+    DoEvents
+
     ' Activate the target sheet first so we never try to delete the active sheet
     tempDraw.ActivateSheet sheetName
 
-    ' Delete every other sheet. Re-query names after each deletion so we detect
-    ' whether it actually worked and don't walk off a stale array.
+    ' Delete every other sheet. Re-query names after each attempt so we know
+    ' whether deletion actually worked.
     Dim maxPasses As Integer : maxPasses = 20
     Dim pass As Integer
+    Dim lastDelErr As Long : lastDelErr = -1
+    Dim lastBDel As Boolean : lastBDel = False
+    Dim lastBSel As Boolean : lastBSel = False
+
     For pass = 1 To maxPasses
         Dim curSheets As Variant
         curSheets = tempDraw.GetSheetNames
@@ -1166,25 +1174,52 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
         Next k
         If sheetToKill = "" Then Exit For
 
-        ' Primary: DrawingDoc.DeleteSheet (documented API)
-        Dim bDel As Boolean : bDel = False
+        ' Method 1: DrawingDoc.DeleteSheet
+        lastBDel = False : lastDelErr = 0
         On Error Resume Next
-        bDel = tempDraw.DeleteSheet(sheetToKill)
-        Dim delErr As Long : delErr = Err.Number
+        lastBDel = tempDraw.DeleteSheet(sheetToKill)
+        lastDelErr = Err.Number
         On Error GoTo 0
+        DoEvents
 
-        ' Fallback: SelectByID2 + EditDelete
-        If delErr <> 0 Or Not bDel Then
+        ' Method 2: SelectByID2("SHEET") + EditDelete
+        If lastDelErr <> 0 Or Not lastBDel Then
             tempModel.ClearSelection2 True
-            Dim bSel As Boolean
-            bSel = tempModel.Extension.SelectByID2(sheetToKill, "SHEET", 0, 0, 0, False, 0, Nothing, 0)
-            If bSel Then tempModel.EditDelete
+            lastBSel = tempModel.Extension.SelectByID2(sheetToKill, "SHEET", 0, 0, 0, False, 0, Nothing, 0)
+            If lastBSel Then
+                tempModel.EditDelete
+                DoEvents
+            End If
         End If
 
-        DoEvents  ' give SW time to process the deletion
+        ' Method 3: activate the sheet to delete, then EditDelete (no explicit selection)
+        If lastDelErr <> 0 Or Not lastBDel Then
+            If Not lastBSel Then
+                tempDraw.ActivateSheet sheetToKill
+                DoEvents
+                tempModel.EditDelete
+                DoEvents
+                tempDraw.ActivateSheet sheetName
+                DoEvents
+            End If
+        End If
+
     Next pass
 
-    tempModel.ForceRebuild3 False
+    ' ---- Diagnostic: fires only when sheets could not be deleted ----
+    Dim finalSheets As Variant
+    finalSheets = tempDraw.GetSheetNames
+    If UBound(finalSheets) > 0 Then
+        Dim passesRun As Integer
+        If pass > maxPasses Then passesRun = maxPasses Else passesRun = pass - 1
+        MsgBox "DWG sheet deletion diagnostic:" & vbCrLf & _
+               "Sheets remaining: " & (UBound(finalSheets) + 1) & vbCrLf & _
+               "Passes run: " & passesRun & vbCrLf & _
+               "DeleteSheet Err#: " & lastDelErr & vbCrLf & _
+               "DeleteSheet returned: " & lastBDel & vbCrLf & _
+               "SelectByID2 returned: " & lastBSel, _
+               vbExclamation, "DWG Export Debug"
+    End If
 
     ' SaveAs3 (lower-level than Extension.SaveAs) for format conversion
     Dim dwgResult As Long
