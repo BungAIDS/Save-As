@@ -1134,8 +1134,10 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
         Exit Function
     End If
 
-    Dim tempDraw As Object   ' late-bound: DeleteSheet is on a newer IDrawingDoc interface
-    Set tempDraw = tempModel
+    ' Get DrawingDoc interface from swApp.ActiveDoc — ActivateDoc2's return value
+    ' carries ModelDoc2's IDispatch which doesn't expose DrawingDoc methods.
+    Dim tempDraw As SldWorks.DrawingDoc
+    Set tempDraw = swApp.ActiveDoc
 
     ' Activate the target sheet first so we never try to delete the active sheet
     tempDraw.ActivateSheet sheetName
