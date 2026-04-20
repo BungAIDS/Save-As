@@ -1119,6 +1119,11 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
     Set fso = Nothing
     If fsoErr <> 0 Then Exit Function
 
+    ' Strip read-only attribute — network copies often inherit it, blocking all edits
+    On Error Resume Next
+    SetAttr tempPath, vbNormal
+    On Error GoTo 0
+
     ' Open visibly — DWG export requires drawing views to be rendered first
     Dim actErr As Long
     Dim tempModel As SldWorks.ModelDoc2
@@ -1133,22 +1138,51 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
         On Error Resume Next : Kill tempPath : On Error GoTo 0
         Exit Function
     End If
+    DoEvents  ' Let SW finish document initialisation before calling DrawingDoc methods
 
-    ' Get DrawingDoc interface from swApp.ActiveDoc — ActivateDoc2's return value
-    ' carries ModelDoc2's IDispatch which doesn't expose DrawingDoc methods.
-    Dim tempDraw As SldWorks.DrawingDoc
+    ' Late-bind to DrawingDoc so VBA doesn't pin us to ModelDoc2's IDispatch
+    Dim tempDraw As Object
     Set tempDraw = swApp.ActiveDoc
 
     ' Activate the target sheet first so we never try to delete the active sheet
     tempDraw.ActivateSheet sheetName
 
-    Dim si As Integer
-    For si = 0 To UBound(allSheets)
-        If LCase(CStr(allSheets(si))) <> LCase(sheetName) Then
-            tempModel.Extension.SelectByID2 CStr(allSheets(si)), "SHEET", 0, 0, 0, False, 0, Nothing, 0
-            tempModel.EditDelete
+    ' Delete every other sheet. Re-query names after each deletion so we detect
+    ' whether it actually worked and don't walk off a stale array.
+    Dim maxPasses As Integer : maxPasses = 20
+    Dim pass As Integer
+    For pass = 1 To maxPasses
+        Dim curSheets As Variant
+        curSheets = tempDraw.GetSheetNames
+        If UBound(curSheets) = 0 Then Exit For  ' only target sheet remains
+
+        Dim sheetToKill As String : sheetToKill = ""
+        Dim k As Integer
+        For k = 0 To UBound(curSheets)
+            If LCase(CStr(curSheets(k))) <> LCase(sheetName) Then
+                sheetToKill = CStr(curSheets(k))
+                Exit For
+            End If
+        Next k
+        If sheetToKill = "" Then Exit For
+
+        ' Primary: DrawingDoc.DeleteSheet (documented API)
+        Dim bDel As Boolean : bDel = False
+        On Error Resume Next
+        bDel = tempDraw.DeleteSheet(sheetToKill)
+        Dim delErr As Long : delErr = Err.Number
+        On Error GoTo 0
+
+        ' Fallback: SelectByID2 + EditDelete
+        If delErr <> 0 Or Not bDel Then
+            tempModel.ClearSelection2 True
+            Dim bSel As Boolean
+            bSel = tempModel.Extension.SelectByID2(sheetToKill, "SHEET", 0, 0, 0, False, 0, Nothing, 0)
+            If bSel Then tempModel.EditDelete
         End If
-    Next si
+
+        DoEvents  ' give SW time to process the deletion
+    Next pass
 
     tempModel.ForceRebuild3 False
 
