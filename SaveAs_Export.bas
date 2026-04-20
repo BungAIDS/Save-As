@@ -1145,7 +1145,8 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
     Dim si As Integer
     For si = 0 To UBound(allSheets)
         If LCase(CStr(allSheets(si))) <> LCase(sheetName) Then
-            tempDraw.DeleteSheet CStr(allSheets(si))
+            tempModel.Extension.SelectByID2 CStr(allSheets(si)), "DRAWING", 0, 0, 0, False, 0, Nothing, 0
+            tempModel.EditDelete
         End If
     Next si
 
