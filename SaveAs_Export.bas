@@ -1097,19 +1097,40 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
         Exit Function
     End If
 
-    ' Multi-sheet: copy the .slddrw beside the original (preserves references),
-    ' open, delete every sheet except the target, export to model-space DWG.
+    ' Multi-sheet: need to export each sheet individually.
     Dim drawModel As SldWorks.ModelDoc2
     Set drawModel = swDraw
-
     Dim srcPath As String : srcPath = drawModel.GetPathName
+
+    ' Find 0-based index of the target sheet
+    Dim sheetIdx As Integer : sheetIdx = 0
+    Dim ji As Integer
+    For ji = 0 To UBound(allSheets)
+        If LCase(CStr(allSheets(ji))) = LCase(sheetName) Then
+            sheetIdx = ji : Exit For
+        End If
+    Next ji
+
+    ' === Strategy 1: ExportToDWG2 — exports one sheet directly, no temp file needed ===
+    ' Late-bind so we're not limited to SW 2025's broken IDispatch table for DrawingDoc.
+    ' Signature (best known): ExportToDWG2(FileName, OrigFileName, Options, AllSheets, SheetIndex)
+    Dim drawLate As Object : Set drawLate = swDraw
+    Dim e2Err As Long
+
+    On Error Resume Next
+    ExportToDWG = drawLate.ExportToDWG2(outPath, srcPath, 0, False, sheetIdx)
+    e2Err = Err.Number
+    On Error GoTo 0
+
+    If e2Err = 0 Then Exit Function  ' ExportToDWG2 ran — result already in ExportToDWG
+
+    ' === Strategy 2: temp copy + sheet deletion (fallback if ExportToDWG2 unavailable) ===
     Dim srcFolder As String
     srcFolder = Left(srcPath, InStrRev(srcPath, "\"))
 
     Dim tempPath As String
     tempPath = srcFolder & "SW_DWG_TEMP_" & Format(Now, "YYYYMMDDHHmmss") & ".slddrw"
 
-    ' Filesystem copy is more reliable than Extension.SaveAs+Copy on network drives
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
     On Error Resume Next
@@ -1119,12 +1140,10 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
     Set fso = Nothing
     If fsoErr <> 0 Then Exit Function
 
-    ' Strip read-only attribute — network copies often inherit it, blocking all edits
     On Error Resume Next
     SetAttr tempPath, vbNormal
     On Error GoTo 0
 
-    ' Open visibly — DWG export requires drawing views to be rendered first
     Dim actErr As Long
     Dim tempModel As SldWorks.ModelDoc2
     Set tempModel = swApp.OpenDoc6(tempPath, swDocDRAWING, 0, "", errors, warnings)
@@ -1138,21 +1157,14 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
         On Error Resume Next : Kill tempPath : On Error GoTo 0
         Exit Function
     End If
-    DoEvents  ' Let SW finish document initialisation before calling DrawingDoc methods
-
-    ' Late-bind to DrawingDoc so VBA doesn't pin us to ModelDoc2's IDispatch
-    Dim tempDraw As Object
-    Set tempDraw = swApp.ActiveDoc
-
-    ' Rebuild before editing so SW considers the document fully loaded
-    tempModel.ForceRebuild3 False
     DoEvents
 
-    ' Activate the target sheet first so we never try to delete the active sheet
+    Dim tempDraw As Object
+    Set tempDraw = swApp.ActiveDoc
+    tempModel.ForceRebuild3 False
+    DoEvents
     tempDraw.ActivateSheet sheetName
 
-    ' Delete every other sheet. Re-query names after each attempt so we know
-    ' whether deletion actually worked.
     Dim maxPasses As Integer : maxPasses = 20
     Dim pass As Integer
     Dim lastDelErr As Long : lastDelErr = -1
@@ -1162,7 +1174,7 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
     For pass = 1 To maxPasses
         Dim curSheets As Variant
         curSheets = tempDraw.GetSheetNames
-        If UBound(curSheets) = 0 Then Exit For  ' only target sheet remains
+        If UBound(curSheets) = 0 Then Exit For
 
         Dim sheetToKill As String : sheetToKill = ""
         Dim k As Integer
@@ -1174,7 +1186,6 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
         Next k
         If sheetToKill = "" Then Exit For
 
-        ' Method 1: DrawingDoc.DeleteSheet
         lastBDel = False : lastDelErr = 0
         On Error Resume Next
         lastBDel = tempDraw.DeleteSheet(sheetToKill)
@@ -1182,7 +1193,6 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
         On Error GoTo 0
         DoEvents
 
-        ' Method 2: SelectByID2("SHEET") + DeleteSelection(True) — suppress confirm dialog
         If lastDelErr <> 0 Or Not lastBDel Then
             tempModel.ClearSelection2 True
             lastBSel = tempModel.Extension.SelectByID2(sheetToKill, "SHEET", 0, 0, 0, False, 0, Nothing, 0)
@@ -1194,7 +1204,6 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
             End If
         End If
 
-        ' Method 3: feature-tree walk — Select2 the sheet feature, then DeleteSelection
         If lastDelErr <> 0 Or Not lastBDel Then
             If Not lastBSel Then
                 Dim swFeat As SldWorks.Feature
@@ -1218,25 +1227,22 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
                 Set swFeat = Nothing
             End If
         End If
-
     Next pass
 
-    ' ---- Diagnostic: fires only when sheets could not be deleted ----
     Dim finalSheets As Variant
     finalSheets = tempDraw.GetSheetNames
     If UBound(finalSheets) > 0 Then
         Dim passesRun As Integer
         If pass > maxPasses Then passesRun = maxPasses Else passesRun = pass - 1
         MsgBox "DWG sheet deletion diagnostic:" & vbCrLf & _
+               "ExportToDWG2 Err#: " & e2Err & vbCrLf & _
                "Sheets remaining: " & (UBound(finalSheets) + 1) & vbCrLf & _
                "Passes run: " & passesRun & vbCrLf & _
                "DeleteSheet Err#: " & lastDelErr & vbCrLf & _
-               "DeleteSheet returned: " & lastBDel & vbCrLf & _
                "SelectByID2 returned: " & lastBSel, _
                vbExclamation, "DWG Export Debug"
     End If
 
-    ' SaveAs3 (lower-level than Extension.SaveAs) for format conversion
     Dim dwgResult As Long
     dwgResult = tempModel.SaveAs3(outPath, 0, swSaveAsOptions_Silent Or swSaveAsOptions_Copy)
     ExportToDWG = (dwgResult = 0)
