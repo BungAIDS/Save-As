@@ -1165,87 +1165,39 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
     DoEvents
     tempDraw.ActivateSheet sheetName
 
-    Dim maxPasses As Integer : maxPasses = 20
-    Dim pass As Integer
-    Dim lastDelErr As Long : lastDelErr = -1
-    Dim lastBDel As Boolean : lastBDel = False
-    Dim lastBSel As Boolean : lastBSel = False
-
-    For pass = 1 To maxPasses
-        Dim curSheets As Variant
-        curSheets = tempDraw.GetSheetNames
-        If UBound(curSheets) = 0 Then Exit For
-
-        Dim sheetToKill As String : sheetToKill = ""
-        Dim k As Integer
-        For k = 0 To UBound(curSheets)
-            If LCase(CStr(curSheets(k))) <> LCase(sheetName) Then
-                sheetToKill = CStr(curSheets(k))
-                Exit For
-            End If
-        Next k
-        If sheetToKill = "" Then Exit For
-
-        lastBDel = False : lastDelErr = 0
+    ' Move target sheet to position 1 so SW exports it to model space.
+    ' SW always puts the first sheet in model space; MoveSheet avoids deletion entirely.
+    Dim moveErr As Long : moveErr = -1
+    Dim bMoved  As Boolean : bMoved = False
+    If sheetIdx > 0 Then  ' already first? no move needed
         On Error Resume Next
-        lastBDel = tempDraw.DeleteSheet(sheetToKill)
-        lastDelErr = Err.Number
+        bMoved = tempDraw.MoveSheet(sheetName, 0)   ' try 0-based index
+        moveErr = Err.Number
         On Error GoTo 0
+
+        If moveErr <> 0 Then                         ' try 1-based index
+            On Error Resume Next
+            bMoved = tempDraw.MoveSheet(sheetName, 1)
+            moveErr = Err.Number
+            On Error GoTo 0
+        End If
         DoEvents
-
-        If lastDelErr <> 0 Or Not lastBDel Then
-            tempModel.ClearSelection2 True
-            lastBSel = tempModel.Extension.SelectByID2(sheetToKill, "SHEET", 0, 0, 0, False, 0, Nothing, 0)
-            If lastBSel Then
-                On Error Resume Next
-                tempModel.Extension.DeleteSelection True
-                On Error GoTo 0
-                DoEvents
-            End If
-        End If
-
-        If lastDelErr <> 0 Or Not lastBDel Then
-            If Not lastBSel Then
-                Dim swFeat As SldWorks.Feature
-                Set swFeat = tempModel.FirstFeature
-                Do While Not swFeat Is Nothing
-                    If LCase(swFeat.Name) = LCase(sheetToKill) Then
-                        On Error Resume Next
-                        swFeat.Select2 False, 0
-                        Dim featSelOk As Boolean : featSelOk = (Err.Number = 0)
-                        On Error GoTo 0
-                        If featSelOk Then
-                            On Error Resume Next
-                            tempModel.Extension.DeleteSelection True
-                            On Error GoTo 0
-                            DoEvents
-                        End If
-                        Exit Do
-                    End If
-                    Set swFeat = swFeat.GetNextFeature
-                Loop
-                Set swFeat = Nothing
-            End If
-        End If
-    Next pass
-
-    Dim finalSheets As Variant
-    finalSheets = tempDraw.GetSheetNames
-    If UBound(finalSheets) > 0 Then
-        Dim passesRun As Integer
-        If pass > maxPasses Then passesRun = maxPasses Else passesRun = pass - 1
-        MsgBox "DWG sheet deletion diagnostic:" & vbCrLf & _
-               "ExportToDWG2 Err#: " & e2Err & vbCrLf & _
-               "Sheets remaining: " & (UBound(finalSheets) + 1) & vbCrLf & _
-               "Passes run: " & passesRun & vbCrLf & _
-               "DeleteSheet Err#: " & lastDelErr & vbCrLf & _
-               "SelectByID2 returned: " & lastBSel, _
-               vbExclamation, "DWG Export Debug"
+    Else
+        moveErr = 0 : bMoved = True  ' already in position 1
     End If
 
     Dim dwgResult As Long
     dwgResult = tempModel.SaveAs3(outPath, 0, swSaveAsOptions_Silent Or swSaveAsOptions_Copy)
     ExportToDWG = (dwgResult = 0)
+
+    ' Diagnostic if MoveSheet was needed but failed
+    If sheetIdx > 0 And moveErr <> 0 Then
+        MsgBox "DWG Export diagnostic:" & vbCrLf & _
+               "ExportToDWG2 Err#: " & e2Err & vbCrLf & _
+               "MoveSheet Err#: " & moveErr & vbCrLf & _
+               "Sheet '" & sheetName & "' may not be in model space.", _
+               vbExclamation, "DWG Export Debug"
+    End If
 
     swApp.CloseDoc tempPath
     On Error Resume Next : Kill tempPath : On Error GoTo 0
