@@ -216,8 +216,12 @@ Sub main()
         Dim si As Integer
         For si = 0 To UBound(dwgSheets)
             Dim sheetNum As String
-            sheetNum = Format(si + 1, "00")
-            outPath = acJobFolder & drawingBaseName & "-" & sheetNum & revLetter & ".dwg"
+            If UBound(dwgSheets) = 0 Then
+                outPath = acJobFolder & drawingBaseName & revLetter & ".dwg"
+            Else
+                sheetNum = Format(si + 1, "00")
+                outPath = acJobFolder & drawingBaseName & "-" & sheetNum & revLetter & ".dwg"
+            End If
             If ClearToWrite(outPath) Then
                 ok = ExportToDWG(swApp, swDraw, CStr(dwgSheets(si)), outPath, errors, warnings)
                 If ok Then
