@@ -699,17 +699,29 @@ Private Sub DraftTransmittalEmail(ByVal exportBase As String, ByVal revLetter As
         Exit Sub
     End If
 
-    Dim orderOrRev As String
-    orderOrRev = IIf(revLetter = "", "order", "revision")
-
-    Dim signOff As String
-    signOff = GetSignOffName()
-
     Dim body As String
-    body = "Hi Debbie," & vbCrLf & vbCrLf & _
-           "This " & orderOrRev & " is ready for transmittal and close." & vbCrLf & vbCrLf & _
-           "Thanks,"
-    If signOff <> "" Then body = body & vbCrLf & signOff
+
+    If LCase(Environ("USERNAME")) = "somar" Then
+        Dim jobNum As String
+        Dim dashPos2 As Integer : dashPos2 = InStr(exportBase, "-")
+        jobNum = IIf(dashPos2 > 1, Left(exportBase, dashPos2 - 1), exportBase)
+
+        body = "HELLOOO DEBBIE" & vbCrLf & _
+               vbTab & "Order " & jobNum & " is ready for transmittal and close"
+        If revLetter <> "" Then body = body & ", REV " & revLetter & " is done"
+        body = body & "." & vbCrLf & "Thank You" & vbCrLf & "Syed"
+    Else
+        Dim orderOrRev As String
+        orderOrRev = IIf(revLetter = "", "order", "revision")
+
+        Dim signOff As String
+        signOff = GetSignOffName()
+
+        body = "Hi Debbie," & vbCrLf & vbCrLf & _
+               "This " & orderOrRev & " is ready for transmittal and close." & vbCrLf & vbCrLf & _
+               "Thanks,"
+        If signOff <> "" Then body = body & vbCrLf & signOff
+    End If
 
     On Error GoTo EmailErr
 
