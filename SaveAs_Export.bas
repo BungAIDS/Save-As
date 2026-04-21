@@ -706,7 +706,7 @@ Private Sub DraftTransmittalEmail(ByVal exportBase As String, ByVal revLetter As
         Dim dashPos2 As Integer : dashPos2 = InStr(exportBase, "-")
         jobNum = IIf(dashPos2 > 1, Left(exportBase, dashPos2 - 1), exportBase)
 
-        body = "HELLOOO DEBBIE" & vbCrLf & _
+        body = "HELLOOO DEBBIE," & vbCrLf & _
                vbTab & "Order " & jobNum & " is ready for transmittal and close"
         If revLetter <> "" Then body = body & ", REV " & revLetter & " is done"
         body = body & "." & vbCrLf & "Thank You" & vbCrLf & "Syed"
