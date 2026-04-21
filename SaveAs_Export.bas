@@ -1074,7 +1074,10 @@ Private Function ExportToPDF(ByVal swDraw As SldWorks.DrawingDoc, _
 End Function
 
 '==============================================================================
-' EXPORT – DWG
+' EXPORT – DWG  (one sheet per file, sheet lands in model space)
+'
+' Sets swDxfMultiSheetOption to ActiveSheetOnly before export so SolidWorks
+' writes only the active sheet — no temp files, no sheet deletion needed.
 '==============================================================================
 Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
                              ByVal swDraw As SldWorks.DrawingDoc, _
@@ -1084,123 +1087,21 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
                              ByRef warnings As Long) As Boolean
     ExportToDWG = False
 
-    Dim allSheets As Variant
-    allSheets = swDraw.GetSheetNames
+    Dim origPref As Long
+    origPref = swApp.GetUserPreferenceIntegerValue(swUserPreferenceIntegerValue_e.swDxfMultiSheetOption)
+    swApp.SetUserPreferenceIntegerValue swUserPreferenceIntegerValue_e.swDxfMultiSheetOption, _
+        swDxfMultisheet_e.swDxfActiveSheetOnly
 
-    ' Single-sheet drawing: export the original document directly
-    If UBound(allSheets) = 0 Then
-        Dim swModelSingle As SldWorks.ModelDoc2
-        Set swModelSingle = swDraw
-        Dim r0 As Long
-        r0 = swModelSingle.SaveAs3(outPath, 0, swSaveAsOptions_Silent Or swSaveAsOptions_Copy)
-        ExportToDWG = (r0 = 0)
-        Exit Function
-    End If
+    swDraw.ActivateSheet sheetName
 
-    ' Multi-sheet: need to export each sheet individually.
-    Dim drawModel As SldWorks.ModelDoc2
-    Set drawModel = swDraw
-    Dim srcPath As String : srcPath = drawModel.GetPathName
+    Dim swModel As SldWorks.ModelDoc2
+    Set swModel = swDraw
+    ExportToDWG = swModel.Extension.SaveAs(outPath, _
+                                           swSaveAsCurrentVersion, _
+                                           swSaveAsOptions_Silent Or swSaveAsOptions_Copy, _
+                                           Nothing, errors, warnings)
 
-    ' Find 0-based index of the target sheet
-    Dim sheetIdx As Integer : sheetIdx = 0
-    Dim ji As Integer
-    For ji = 0 To UBound(allSheets)
-        If LCase(CStr(allSheets(ji))) = LCase(sheetName) Then
-            sheetIdx = ji : Exit For
-        End If
-    Next ji
-
-    ' === Strategy 1: ExportToDWG2 — exports one sheet directly, no temp file needed ===
-    ' Late-bind so we're not limited to SW 2025's broken IDispatch table for DrawingDoc.
-    ' Signature (best known): ExportToDWG2(FileName, OrigFileName, Options, AllSheets, SheetIndex)
-    Dim drawLate As Object : Set drawLate = swDraw
-    Dim e2Err As Long
-
-    On Error Resume Next
-    ExportToDWG = drawLate.ExportToDWG2(outPath, srcPath, 0, False, sheetIdx)
-    e2Err = Err.Number
-    On Error GoTo 0
-
-    If e2Err = 0 Then Exit Function  ' ExportToDWG2 ran — result already in ExportToDWG
-
-    ' === Strategy 2: temp copy + sheet deletion (fallback if ExportToDWG2 unavailable) ===
-    Dim srcFolder As String
-    srcFolder = Left(srcPath, InStrRev(srcPath, "\"))
-
-    Dim tempPath As String
-    tempPath = srcFolder & "SW_DWG_TEMP_" & Format(Now, "YYYYMMDDHHmmss") & ".slddrw"
-
-    Dim fso As Object
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    On Error Resume Next
-    fso.CopyFile srcPath, tempPath, True
-    Dim fsoErr As Long : fsoErr = Err.Number
-    On Error GoTo 0
-    Set fso = Nothing
-    If fsoErr <> 0 Then Exit Function
-
-    On Error Resume Next
-    SetAttr tempPath, vbNormal
-    On Error GoTo 0
-
-    Dim actErr As Long
-    Dim tempModel As SldWorks.ModelDoc2
-    Set tempModel = swApp.OpenDoc6(tempPath, swDocDRAWING, 0, "", errors, warnings)
-    If tempModel Is Nothing Then
-        On Error Resume Next : Kill tempPath : On Error GoTo 0
-        Exit Function
-    End If
-    Set tempModel = swApp.ActivateDoc2(tempPath, False, actErr)
-    If tempModel Is Nothing Then
-        swApp.CloseDoc tempPath
-        On Error Resume Next : Kill tempPath : On Error GoTo 0
-        Exit Function
-    End If
-    DoEvents
-
-    Dim tempDraw As Object
-    Set tempDraw = swApp.ActiveDoc
-    tempModel.ForceRebuild3 False
-    DoEvents
-    tempDraw.ActivateSheet sheetName
-
-    ' Move target sheet to position 1 so SW exports it to model space.
-    ' SW always puts the first sheet in model space; MoveSheet avoids deletion entirely.
-    Dim moveErr As Long : moveErr = -1
-    Dim bMoved  As Boolean : bMoved = False
-    If sheetIdx > 0 Then  ' already first? no move needed
-        On Error Resume Next
-        bMoved = tempDraw.MoveSheet(sheetName, 0)   ' try 0-based index
-        moveErr = Err.Number
-        On Error GoTo 0
-
-        If moveErr <> 0 Then                         ' try 1-based index
-            On Error Resume Next
-            bMoved = tempDraw.MoveSheet(sheetName, 1)
-            moveErr = Err.Number
-            On Error GoTo 0
-        End If
-        DoEvents
-    Else
-        moveErr = 0 : bMoved = True  ' already in position 1
-    End If
-
-    Dim dwgResult As Long
-    dwgResult = tempModel.SaveAs3(outPath, 0, swSaveAsOptions_Silent Or swSaveAsOptions_Copy)
-    ExportToDWG = (dwgResult = 0)
-
-    ' Diagnostic if MoveSheet was needed but failed
-    If sheetIdx > 0 And moveErr <> 0 Then
-        MsgBox "DWG Export diagnostic:" & vbCrLf & _
-               "ExportToDWG2 Err#: " & e2Err & vbCrLf & _
-               "MoveSheet Err#: " & moveErr & vbCrLf & _
-               "Sheet '" & sheetName & "' may not be in model space.", _
-               vbExclamation, "DWG Export Debug"
-    End If
-
-    swApp.CloseDoc tempPath
-    On Error Resume Next : Kill tempPath : On Error GoTo 0
+    swApp.SetUserPreferenceIntegerValue swUserPreferenceIntegerValue_e.swDxfMultiSheetOption, origPref
 End Function
 
 '==============================================================================
