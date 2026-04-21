@@ -1182,25 +1182,40 @@ Private Function ExportToDWG(ByVal swApp As SldWorks.SldWorks, _
         On Error GoTo 0
         DoEvents
 
-        ' Method 2: SelectByID2("SHEET") + EditDelete
+        ' Method 2: SelectByID2("SHEET") + DeleteSelection(True) — suppress confirm dialog
         If lastDelErr <> 0 Or Not lastBDel Then
             tempModel.ClearSelection2 True
             lastBSel = tempModel.Extension.SelectByID2(sheetToKill, "SHEET", 0, 0, 0, False, 0, Nothing, 0)
             If lastBSel Then
-                tempModel.EditDelete
+                On Error Resume Next
+                tempModel.Extension.DeleteSelection True
+                On Error GoTo 0
                 DoEvents
             End If
         End If
 
-        ' Method 3: activate the sheet to delete, then EditDelete (no explicit selection)
+        ' Method 3: feature-tree walk — Select2 the sheet feature, then DeleteSelection
         If lastDelErr <> 0 Or Not lastBDel Then
             If Not lastBSel Then
-                tempDraw.ActivateSheet sheetToKill
-                DoEvents
-                tempModel.EditDelete
-                DoEvents
-                tempDraw.ActivateSheet sheetName
-                DoEvents
+                Dim swFeat As SldWorks.Feature
+                Set swFeat = tempModel.FirstFeature
+                Do While Not swFeat Is Nothing
+                    If LCase(swFeat.Name) = LCase(sheetToKill) Then
+                        On Error Resume Next
+                        swFeat.Select2 False, 0
+                        Dim featSelOk As Boolean : featSelOk = (Err.Number = 0)
+                        On Error GoTo 0
+                        If featSelOk Then
+                            On Error Resume Next
+                            tempModel.Extension.DeleteSelection True
+                            On Error GoTo 0
+                            DoEvents
+                        End If
+                        Exit Do
+                    End If
+                    Set swFeat = swFeat.GetNextFeature
+                Loop
+                Set swFeat = Nothing
             End If
         End If
 
