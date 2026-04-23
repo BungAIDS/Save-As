@@ -186,7 +186,8 @@ Sub main()
     '--- Archive any existing revision files for this sheet ---
     '    Wildcard: drawingBaseName & "*.ext"  (e.g. "420788-01*.pdf")
     '    Skip file whose base name matches exportBase
-    ArchiveOldRevisions acJobFolder, drawingBaseName, exportBase, revLetter
+    '    Only archive file types that are being exported this run
+    ArchiveOldRevisions acJobFolder, drawingBaseName, exportBase, revLetter, doPDF, doDWG, doDXF, doSTP
 
     Dim errors   As Long
     Dim warnings As Long
@@ -389,7 +390,11 @@ End Function
 Private Sub ArchiveOldRevisions(ByVal folder As String, _
                                 ByVal baseNoRev As String, _
                                 ByVal currentBase As String, _
-                                ByVal revLetter As String)
+                                ByVal revLetter As String, _
+                                ByVal archivePDF As Boolean, _
+                                ByVal archiveDWG As Boolean, _
+                                ByVal archiveDXF As Boolean, _
+                                ByVal archiveSTP As Boolean)
 
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
@@ -407,89 +412,58 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
     Dim ts       As String
 
     ' --- PDF in the main job folder (exact name match = keep) ---
-    fileName = Dir(folder & baseNoRev & "*.pdf")
-    Do While fileName <> ""
-        If LCase(fso.GetBaseName(fileName)) <> LCase(currentBase) Then
-            If Not fso.FolderExists(histFolder) Then fso.CreateFolder histFolder
-            srcPath  = folder & fileName
-            destPath = histFolder & fileName
-            If fso.FileExists(destPath) Then
-                ts       = Format(Now, "YYYYMMDD_HHmmss")
-                destPath = histFolder & fso.GetBaseName(fileName) & "_" & ts & ".pdf"
+    If archivePDF Then
+        fileName = Dir(folder & baseNoRev & "*.pdf")
+        Do While fileName <> ""
+            If LCase(fso.GetBaseName(fileName)) <> LCase(currentBase) Then
+                If Not fso.FolderExists(histFolder) Then fso.CreateFolder histFolder
+                srcPath  = folder & fileName
+                destPath = histFolder & fileName
+                If fso.FileExists(destPath) Then
+                    ts       = Format(Now, "YYYYMMDD_HHmmss")
+                    destPath = histFolder & fso.GetBaseName(fileName) & "_" & ts & ".pdf"
+                End If
+                On Error Resume Next
+                fso.MoveFile srcPath, destPath
+                If Err.Number <> 0 Then
+                    MsgBox fileName & " could not be moved to History - it may be read-only or open in another program." & vbCrLf & _
+                           "Please close or unlock the file and move it manually.", _
+                           vbExclamation, "Save-As Export – Archive Warning"
+                    Err.Clear
+                End If
+                On Error GoTo 0
             End If
-            On Error Resume Next
-            fso.MoveFile srcPath, destPath
-            If Err.Number <> 0 Then
-                MsgBox fileName & " could not be moved to History - it may be read-only or open in another program." & vbCrLf & _
-                       "Please close or unlock the file and move it manually.", _
-                       vbExclamation, "Save-As Export – Archive Warning"
-                Err.Clear
-            End If
-            On Error GoTo 0
-        End If
-        fileName = Dir()
-    Loop
+            fileName = Dir()
+        Loop
+    End If
 
     ' --- DWG in the main job folder
     '     Keep: exact match (420788-01A) OR per-sheet match (420788-01-01A, 420788-01-02A)
     '     Archive: anything else (different revision)
-    fileName = Dir(folder & baseNoRev & "*.dwg")
-    Do While fileName <> ""
-        Dim dwgBase As String : dwgBase = LCase(fso.GetBaseName(fileName))
-        Dim curBase As String : curBase = LCase(currentBase)
-        Dim rev     As String : rev     = LCase(revLetter)
-        Dim isCurrentDWG As Boolean
-        isCurrentDWG = (dwgBase = curBase)
-        If Not isCurrentDWG Then
-            If Left(dwgBase, Len(baseNoRev) + 1) = LCase(baseNoRev) & "-" Then
-                If rev = "" Then
-                    isCurrentDWG = IsNumeric(Mid(dwgBase, Len(baseNoRev) + 2))
-                Else
-                    isCurrentDWG = (Right(dwgBase, Len(rev)) = rev)
+    If archiveDWG Then
+        fileName = Dir(folder & baseNoRev & "*.dwg")
+        Do While fileName <> ""
+            Dim dwgBase As String : dwgBase = LCase(fso.GetBaseName(fileName))
+            Dim curBase As String : curBase = LCase(currentBase)
+            Dim rev     As String : rev     = LCase(revLetter)
+            Dim isCurrentDWG As Boolean
+            isCurrentDWG = (dwgBase = curBase)
+            If Not isCurrentDWG Then
+                If Left(dwgBase, Len(baseNoRev) + 1) = LCase(baseNoRev) & "-" Then
+                    If rev = "" Then
+                        isCurrentDWG = IsNumeric(Mid(dwgBase, Len(baseNoRev) + 2))
+                    Else
+                        isCurrentDWG = (Right(dwgBase, Len(rev)) = rev)
+                    End If
                 End If
             End If
-        End If
-        If Not isCurrentDWG Then
-            If Not fso.FolderExists(histFolder) Then fso.CreateFolder histFolder
-            srcPath  = folder & fileName
-            destPath = histFolder & fileName
-            If fso.FileExists(destPath) Then
-                ts       = Format(Now, "YYYYMMDD_HHmmss")
-                destPath = histFolder & fso.GetBaseName(fileName) & "_" & ts & ".dwg"
-            End If
-            On Error Resume Next
-            fso.MoveFile srcPath, destPath
-            If Err.Number <> 0 Then
-                MsgBox fileName & " could not be moved to History - it may be read-only or open in another program." & vbCrLf & _
-                       "Please close or unlock the file and move it manually.", _
-                       vbExclamation, "Save-As Export – Archive Warning"
-                Err.Clear
-            End If
-            On Error GoTo 0
-        End If
-        fileName = Dir()
-    Loop
-
-    ' --- STEP in whichever STEP sub-folder exists ("3D STEP" takes priority) ---
-    Dim stepFolder2    As String
-    Dim stepHistFolder As String
-    If fso.FolderExists(folder & "3D STEP\") Then
-        stepFolder2 = folder & "3D STEP\"
-    Else
-        stepFolder2 = folder & "3D STEP FILE\"
-    End If
-    stepHistFolder = GetHistFolder(stepFolder2)
-
-    If fso.FolderExists(stepFolder2) Then
-        fileName = Dir(stepFolder2 & baseNoRev & "*.step")
-        Do While fileName <> ""
-            If LCase(fso.GetBaseName(fileName)) <> LCase(currentBase) Then
-                If Not fso.FolderExists(stepHistFolder) Then fso.CreateFolder stepHistFolder
-                srcPath  = stepFolder2 & fileName
-                destPath = stepHistFolder & fileName
+            If Not isCurrentDWG Then
+                If Not fso.FolderExists(histFolder) Then fso.CreateFolder histFolder
+                srcPath  = folder & fileName
+                destPath = histFolder & fileName
                 If fso.FileExists(destPath) Then
                     ts       = Format(Now, "YYYYMMDD_HHmmss")
-                    destPath = stepHistFolder & fso.GetBaseName(fileName) & "_" & ts & ".step"
+                    destPath = histFolder & fso.GetBaseName(fileName) & "_" & ts & ".dwg"
                 End If
                 On Error Resume Next
                 fso.MoveFile srcPath, destPath
@@ -503,32 +477,71 @@ Private Sub ArchiveOldRevisions(ByVal folder As String, _
             End If
             fileName = Dir()
         Loop
+    End If
+
+    ' --- STEP in whichever STEP sub-folder exists ("3D STEP" takes priority) ---
+    If archiveSTP Then
+        Dim stepFolder2    As String
+        Dim stepHistFolder As String
+        If fso.FolderExists(folder & "3D STEP\") Then
+            stepFolder2 = folder & "3D STEP\"
+        Else
+            stepFolder2 = folder & "3D STEP FILE\"
+        End If
+        stepHistFolder = GetHistFolder(stepFolder2)
+
+        If fso.FolderExists(stepFolder2) Then
+            fileName = Dir(stepFolder2 & baseNoRev & "*.step")
+            Do While fileName <> ""
+                If LCase(fso.GetBaseName(fileName)) <> LCase(currentBase) Then
+                    If Not fso.FolderExists(stepHistFolder) Then fso.CreateFolder stepHistFolder
+                    srcPath  = stepFolder2 & fileName
+                    destPath = stepHistFolder & fileName
+                    If fso.FileExists(destPath) Then
+                        ts       = Format(Now, "YYYYMMDD_HHmmss")
+                        destPath = stepHistFolder & fso.GetBaseName(fileName) & "_" & ts & ".step"
+                    End If
+                    On Error Resume Next
+                    fso.MoveFile srcPath, destPath
+                    If Err.Number <> 0 Then
+                        MsgBox fileName & " could not be moved to History - it may be read-only or open in another program." & vbCrLf & _
+                               "Please close or unlock the file and move it manually.", _
+                               vbExclamation, "Save-As Export – Archive Warning"
+                        Err.Clear
+                    End If
+                    On Error GoTo 0
+                End If
+                fileName = Dir()
+            Loop
+        End If
     End If
 
     ' --- DXF in the DXF sub-folder → DXF\History\ ---
-    If fso.FolderExists(dxfFolder) Then
-        fileName = Dir(dxfFolder & baseNoRev & "*.dxf")
-        Do While fileName <> ""
-            If LCase(fso.GetBaseName(fileName)) <> LCase(currentBase) Then
-                If Not fso.FolderExists(dxfHistFolder) Then fso.CreateFolder dxfHistFolder
-                srcPath  = dxfFolder & fileName
-                destPath = dxfHistFolder & fileName
-                If fso.FileExists(destPath) Then
-                    ts       = Format(Now, "YYYYMMDD_HHmmss")
-                    destPath = dxfHistFolder & fso.GetBaseName(fileName) & "_" & ts & ".dxf"
+    If archiveDXF Then
+        If fso.FolderExists(dxfFolder) Then
+            fileName = Dir(dxfFolder & baseNoRev & "*.dxf")
+            Do While fileName <> ""
+                If LCase(fso.GetBaseName(fileName)) <> LCase(currentBase) Then
+                    If Not fso.FolderExists(dxfHistFolder) Then fso.CreateFolder dxfHistFolder
+                    srcPath  = dxfFolder & fileName
+                    destPath = dxfHistFolder & fileName
+                    If fso.FileExists(destPath) Then
+                        ts       = Format(Now, "YYYYMMDD_HHmmss")
+                        destPath = dxfHistFolder & fso.GetBaseName(fileName) & "_" & ts & ".dxf"
+                    End If
+                    On Error Resume Next
+                    fso.MoveFile srcPath, destPath
+                    If Err.Number <> 0 Then
+                        MsgBox fileName & " could not be moved to History - it may be read-only or open in another program." & vbCrLf & _
+                               "Please close or unlock the file and move it manually.", _
+                               vbExclamation, "Save-As Export – Archive Warning"
+                        Err.Clear
+                    End If
+                    On Error GoTo 0
                 End If
-                On Error Resume Next
-                fso.MoveFile srcPath, destPath
-                If Err.Number <> 0 Then
-                    MsgBox fileName & " could not be moved to History - it may be read-only or open in another program." & vbCrLf & _
-                           "Please close or unlock the file and move it manually.", _
-                           vbExclamation, "Save-As Export – Archive Warning"
-                    Err.Clear
-                End If
-                On Error GoTo 0
-            End If
-            fileName = Dir()
-        Loop
+                fileName = Dir()
+            Loop
+        End If
     End If
 
     Set fso = Nothing
