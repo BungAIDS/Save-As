@@ -1,13 +1,12 @@
 Generate a self-contained VBA `LogXxx` subroutine that can be dropped into any SolidWorks macro, following the exact same pattern used in `SaveAs_Export.bas` (`LogExport`).
 
-The user will provide: $ARGUMENTS
+The user has typed: $ARGUMENTS
 
-Parse the arguments as:
-1. **Macro name** – used to name the sub (`LogMacroName`) and the log files (`MacroName_Log.xlsx`, `MacroName_Overflow.csv`)
-2. **Log folder path** – where the files go (e.g. `Z:\DAG\SOLIDWORKS MACRO\My Macro\Log\`)
-3. **Columns** – a comma-separated list of column names the caller wants beyond Date/Time/User
+1. If they gave a macro name, use it. If not, ask: "What do you want to call the macro?"
+2. Ask: "What does each run log? Describe what happened (e.g. which file was processed, what the result was) and I'll turn that into column names for you."
+3. Ask: "What folder should the log files go in?"
 
-If the user didn't supply all three, ask for the missing ones before generating.
+Ask all missing questions in a single message, then generate once you have the answers. Do not ask the user to specify column names directly — figure them out from their description of what the macro does.
 
 Generate a complete, ready-to-paste VBA subroutine that:
 - Has a clear signature with one `ByVal` parameter per custom column
