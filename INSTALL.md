@@ -5,6 +5,7 @@
 |------|---------|
 | `SaveAs_Export.bas` | Main macro logic (module) |
 | `ExportDialog.frm`  | Dialog box (UserForm) |
+| `MacroLogger.bas`   | Reusable Excel/CSV logger – import into any VBA macro project |
 
 ---
 
@@ -47,6 +48,12 @@ Open `ExportDialog` in the designer and add the following controls with the exac
 | CheckBox      | `chkEmail`       | Draft an e-mail to Debbie Decker for drawing transmittal? | Default unchecked |
 | CommandButton | `btnOK`          | Export                                | Default = True                 |
 | CommandButton | `btnCancel`      | Cancel                                | Cancel = True                  |
+
+### 4b – Import MacroLogger (optional but recommended)
+1. **File → Import File…**
+2. Browse to `MacroLogger.bas` and click **Open**.
+3. This adds a `MacroLogger` module that any other module in the same project can call.
+   See the **MacroLogger** section at the bottom of this file for usage details.
 
 ### 5 – Run the macro
 1. Open (or activate) a SolidWorks drawing (`.SLDDRW`).
@@ -92,3 +99,69 @@ Before writing new files the macro scans the drawing folder (and `DXF\`) for any
 
 ### Path validation
 If the drawing is not inside `Z:\Solidworks\Current\JOBS` or is not under a recognised job-type folder, the macro will warn and ask whether to continue.
+
+---
+
+## MacroLogger – reusable logger for any VBA macro
+
+`MacroLogger.bas` can be imported into **any** SolidWorks (or Office) VBA project to give it an Excel log with a CSV fallback automatically.
+
+### What it creates
+
+| File | When used |
+|------|-----------|
+| `<logDir>\<logName>_Log.xlsx` | Primary log (always attempted first) |
+| `<logDir>\<logName>_Overflow.csv` | Fallback when the .xlsx is open by another user |
+
+### Sheet layout
+
+| Row | Content |
+|-----|---------|
+| 1 | **Total Runs** \| `=COUNTA(A4:A1048576)` (live count) — bold |
+| 2 | *(empty gap)* |
+| 3 | **Date \| Time \| User \| …your columns…** — bold header |
+| 4+ | One row per `WriteLog` call |
+
+`Date`, `Time`, and `User` are written automatically on every call.
+
+### Calling convention
+
+```vba
+' Minimal example – call this from your macro's main export/action sub:
+MacroLogger.WriteLog _
+    "Z:\DAG\SOLIDWORKS MACRO\My Macro\Log\", _   ' logDir  (trailing \ optional)
+    "MyMacro", _                                   ' logName (becomes MyMacro_Log.xlsx)
+    Array("Job Number", "Result", "Notes"), _      ' column headers
+    Array(jobNum,       result,   notes)            ' matching values
+```
+
+The log directory is created automatically if it does not exist.  
+Values are coerced to strings via `CStr()` – format them before passing if needed.
+
+### Example: adding logging to a new macro
+
+```vba
+Sub RunMyMacro()
+    ' ... do your work ...
+
+    Dim jobNum  As String : jobNum  = "420788"
+    Dim outcome As String : outcome = "OK"
+    Dim skipped As Long   : skipped = 3
+
+    MacroLogger.WriteLog _
+        "Z:\DAG\SOLIDWORKS MACRO\My Macro\Log\", _
+        "MyMacro", _
+        Array("Job Number", "Outcome", "Skipped Sheets"), _
+        Array(jobNum, outcome, skipped)
+End Sub
+```
+
+Running this three times produces a sheet like:
+
+| Total Runs | 3 | | |
+|---|---|---|---|
+| | | | |
+| **Date** | **Time** | **User** | **Job Number** | **Outcome** | **Skipped Sheets** |
+| 2026-04-24 | 09:15:02 | jsmith | 420788 | OK | 3 |
+| 2026-04-24 | 10:30:44 | jsmith | 420789 | OK | 0 |
+| 2026-04-24 | 14:05:11 | mwilson | 420790 | OK | 1 |
