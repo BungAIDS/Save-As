@@ -620,7 +620,7 @@ Private Sub LogExport(ByVal jobNumber As String, _
         xlWS.Name = "Export Log"
 
         xlWS.Cells(1, 1).Value = "Total Runs"
-        xlWS.Cells(1, 2).Value = 0
+        xlWS.Cells(1, 2).Formula = "=COUNTA(A4:A1048576)"
         xlWS.Cells(1, 3).Value = "Time Saved"
         ' Formula auto-calculates time saved from B1 (total runs = total minutes)
         Dim tsf As String
@@ -659,10 +659,8 @@ Private Sub LogExport(ByVal jobNumber As String, _
     xlWS.Cells(lastRow, 10).Value = IIf(didSTP, "YES", "NO")
     xlWS.Cells(lastRow, 11).Value = IIf(didEmail, "YES", "NO")
 
-    ' Update total runs – D1 formula recalculates automatically
-    Dim totalRuns As Long
-    totalRuns = lastRow - DATA_START + 1
-    xlWS.Cells(1, 2).Value = totalRuns
+    ' Ensure B1 is always the live COUNTA formula (upgrades any file still holding a hardcoded number)
+    xlWS.Cells(1, 2).Formula = "=COUNTA(A4:A1048576)"
     xlWS.Columns("A:K").AutoFit
 
     If fso.FileExists(LOG_XLSX) Then
